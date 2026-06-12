@@ -2,7 +2,7 @@
 # Copy to threat_model.yaml and edit. Commit configs alongside results.
 
 models:
-  - gpt-4o-2024-05-13
+  - llama-3.3-70b-versatile   # via Groq (OpenAI-compatible)
 
 suites:
   - workspace
