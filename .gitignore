@@ -1,0 +1,14 @@
+.env
+.env*
+.envrc
+.direnv
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# raw run outputs (commit only small/curated results)
+results/*
+!results/.gitkeep

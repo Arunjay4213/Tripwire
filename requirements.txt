@@ -1,0 +1,13 @@
+# tripwire — agent injection-eval harness
+# Core dependency (verified install command from roadmap §0.1):
+agentdojo[transformers]
+
+# NOTE: roadmap says pin everything for reproducibility. After you
+#   pip install -r requirements.txt
+# in a fresh venv, lock exact versions with:
+#   pip freeze > requirements.txt
+# Until then this file is unpinned and resolves to latest agentdojo.
+
+# --- dev / test (uncomment as needed) ---
+# pytest
+# ruff

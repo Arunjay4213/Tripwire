@@ -1,0 +1,21 @@
+# Threat model / run config (roadmap Weeks 4-5).
+# Copy to threat_model.yaml and edit. Commit configs alongside results.
+
+models:
+  - gpt-4o-2024-05-13
+
+suites:
+  - workspace
+
+attacks:
+  - important_instructions
+
+defenses:
+  - tool_filter
+
+seeds: [0, 1, 2]
+
+# hard cost controls (add now, roadmap Weeks 4-5)
+limits:
+  max_tokens_per_run: null
+  smoke: false          # --smoke runs a tiny subset cheaply
