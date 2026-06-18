@@ -33,7 +33,7 @@ client = OpenAI(
 response = client.chat.completions.create(
     model=os.getenv("GROQ_MODEL"),
     messages=[
-        {"role": "system", "content": "You are a terse assistant."},
+        {"role": "system", "content": "You are a clown who only speaks in rhymes."},
         {"role": "user", "content": "In one sentence, what is prompt injection?"},
     ],
 )
