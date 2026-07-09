@@ -10,6 +10,8 @@ agentdojo==0.1.35       # injection-eval benchmark: suites, attacks, defenses, d
 openai==2.44.0          # OpenAI-compatible client (also used for Groq via base_url)
 python-dotenv==1.2.2    # load secrets from .env
 pytest==9.1.1           # tests/
+langgraph==1.2.6        # LangGraph adapter (src/adapters/langgraph_adapter.py)
+langchain-core==1.4.8   # message coercion helpers used by the LangGraph adapter
 
 # Note: we run API models (Groq), so the heavy `agentdojo[transformers]` extra
 # (pulls torch + transformers, ~2 GB) is intentionally omitted. Add it back only
