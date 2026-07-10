@@ -7,7 +7,6 @@ import os
 import sys
 
 from dotenv import load_dotenv
-from openai import OpenAI
 
 # Allow running as `python -m tripwire` from repo root (src/ is the package
 # but imports use `from src.…`).  Ensure repo root is on sys.path.
@@ -15,7 +14,7 @@ _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
-from src.config.loader import load_config, resolve_adapters, resolve_attacks
+from src.config.loader import load_config, resolve_attacks
 from src.harness.reporter import print_asr_table, write_results
 from src.harness.runner import run_sweep
 
@@ -32,6 +31,12 @@ def main() -> None:
 
     load_dotenv()
 
+    # Checked before load_config(): it resolves adapters eagerly, and
+    # adapters that call out to Groq need this set to construct their client.
+    if not os.environ.get("GROQ_API_KEY"):
+        print("Error: GROQ_API_KEY not set in environment or .env", file=sys.stderr)
+        sys.exit(1)
+
     config = load_config(args.config)
 
     if args.smoke:
@@ -43,14 +48,7 @@ def main() -> None:
         config.models = config.models[:1]
         config.attacks = config.attacks[:1]
 
-    api_key = os.environ.get("GROQ_API_KEY")
-    base_url = os.environ.get("GROQ_BASE_URL", "https://api.groq.com/openai/v1")
-    if not api_key:
-        print("Error: GROQ_API_KEY not set in environment or .env", file=sys.stderr)
-        sys.exit(1)
-
-    client = OpenAI(api_key=api_key, base_url=base_url)
-    adapters = resolve_adapters(client)
+    adapters = config.adapters
     attacks = resolve_attacks(config.attacks)
 
     print(f"Running sweep: {len(adapters)} adapter(s) x {len(config.models)} model(s) "
