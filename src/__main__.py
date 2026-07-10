@@ -16,7 +16,7 @@ if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
 from src.config.loader import load_config, resolve_adapters, resolve_attacks
-from src.harness.reporter import print_asr_table, write_results
+from src.harness.reporter import print_asr_table, print_campaign_table, write_results
 from src.harness.runner import run_sweep
 
 
@@ -56,15 +56,21 @@ def main() -> None:
     print(f"Running sweep: {len(adapters)} adapter(s) x {len(config.models)} model(s) "
           f"x {len(attacks)} attack(s) x {len(config.seeds)} seed(s)")
 
-    results = run_sweep(adapters, config.models, attacks, config.seeds)
+    episodes, campaigns = run_sweep(
+        adapters, config.models, attacks, config.seeds, config.campaign_budget
+    )
 
     # Ensure output directory exists
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
-    write_results(results, args.output)
+    write_results(episodes, args.output, campaigns)
     print(f"\nResults written to {args.output}")
 
-    print()
-    print_asr_table(results)
+    if episodes:
+        print()
+        print_asr_table(episodes)
+    if campaigns:
+        print()
+        print_campaign_table(campaigns)
 
 
 if __name__ == "__main__":

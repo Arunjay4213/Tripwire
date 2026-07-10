@@ -8,7 +8,16 @@ suites:
   - workspace
 
 attacks:
+  # single-shot templated attacks (deterministic, seed-reproducible)
+  - direct
+  - ignore_previous
+  - system_message
+  - injecagent
   - important_instructions
+  - fixed_injection
+  # adaptive attacker — runs a campaign per seed, not a single episode.
+  # LLM-driven, so NOT seed-reproducible. Uses ATTACKER_MODEL (or GROQ_MODEL).
+  - iterative
 
 defenses:
   - tool_filter
@@ -19,3 +28,4 @@ seeds: [0, 1, 2]
 limits:
   max_tokens_per_run: null
   smoke: false          # --smoke runs a tiny subset cheaply
+  campaign_budget: 8    # max attempts per adaptive (iterative) campaign
