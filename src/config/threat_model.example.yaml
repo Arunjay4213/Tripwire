@@ -7,8 +7,13 @@ models:
 suites:
   - workspace
 
+adapters:
+  - raw_loop
+  - langgraph
+
 attacks:
-  - important_instructions
+  - fixed_injection   # matches src/config/loader.py's _ATTACK_REGISTRY;
+                       # "important_instructions" isn't a registered attack yet
 
 defenses:
   - tool_filter
