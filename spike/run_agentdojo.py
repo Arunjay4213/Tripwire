@@ -16,24 +16,104 @@ Run with:  python spike/run_agentdojo.py
 
 import os
 import time
+from collections.abc import Sequence
 from pathlib import Path
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import BadRequestError, OpenAI
 
 from agentdojo.agent_pipeline.agent_pipeline import AgentPipeline, PipelineConfig
-from agentdojo.agent_pipeline.llms.openai_llm import OpenAILLM
+from agentdojo.agent_pipeline.llms.openai_llm import OpenAILLM, chat_completion_request
+from agentdojo.agent_pipeline.llms.openai_llm import (
+    _assistant_message_to_content,
+    _function_to_openai,
+    _message_to_openai,
+)
 from agentdojo.attacks.attack_registry import load_attack
 from agentdojo.benchmark import benchmark_suite_with_injections
+from agentdojo.functions_runtime import EmptyEnv, Env, FunctionCall, FunctionsRuntime
 from agentdojo.logging import OutputLogger
 from agentdojo.task_suite.load_suites import get_suite
+from agentdojo.types import ChatAssistantMessage, ChatMessage
 
 load_dotenv()
+
+import json
+
+MAX_TOOL_RETRIES = 3
+
+
+def _safe_openai_to_assistant_message(message) -> ChatAssistantMessage:
+    """Like AgentDojo's _openai_to_assistant_message but handles Llama quirks:
+    - args=None (no-arg tools) → {}
+    """
+    tool_calls = None
+    if message.tool_calls:
+        tool_calls = []
+        for tc in message.tool_calls:
+            args = json.loads(tc.function.arguments or "{}") or {}
+            tool_calls.append(FunctionCall(
+                function=tc.function.name,
+                args=args,
+                id=tc.id,
+            ))
+    return ChatAssistantMessage(
+        role="assistant",
+        content=_assistant_message_to_content(message),
+        tool_calls=tool_calls or None,
+    )
+
+
+class ResilientGroqLLM(OpenAILLM):
+    """OpenAILLM subclass that retries Groq/Llama tool_use_failed errors.
+
+    Llama sometimes emits XML tool calls (<function=name{...}>) instead of JSON.
+    Groq rejects these with BadRequestError(code='tool_use_failed'). AgentDojo's
+    retry decorator explicitly skips BadRequestError, so these crash the run.
+    This subclass retries up to MAX_TOOL_RETRIES times, then returns a no-op
+    assistant message to let the episode finish gracefully.
+    """
+
+    def query(
+        self,
+        query: str,
+        runtime: FunctionsRuntime,
+        env: Env = EmptyEnv(),
+        messages: Sequence[ChatMessage] = [],
+        extra_args: dict = {},
+    ) -> tuple[str, FunctionsRuntime, Env, Sequence[ChatMessage], dict]:
+        openai_messages = [_message_to_openai(m, self.model) for m in messages]
+        openai_tools = [_function_to_openai(t) for t in runtime.functions.values()]
+
+        for attempt in range(MAX_TOOL_RETRIES):
+            try:
+                completion = chat_completion_request(
+                    self.client, self.model, openai_messages, openai_tools,
+                    self.reasoning_effort, self.temperature,
+                )
+                output = _safe_openai_to_assistant_message(completion.choices[0].message)
+                return query, runtime, env, [*messages, output], extra_args
+            except BadRequestError as e:
+                if getattr(e, "code", None) == "tool_use_failed" and attempt < MAX_TOOL_RETRIES - 1:
+                    print(f"    [retry {attempt+1}/{MAX_TOOL_RETRIES}] tool_use_failed — Llama XML quirk")
+                    continue
+                # Exhausted retries or different BadRequestError — return empty msg
+                # so episode finishes (utility=False) instead of crashing
+                print(f"    [!] tool_use_failed after {attempt+1} tries — skipping turn")
+                fallback = ChatAssistantMessage(
+                    role="assistant",
+                    content=[{"type": "text", "content": "I encountered a tool formatting error."}],
+                    tool_calls=None,
+                )
+                return query, runtime, env, [*messages, fallback], extra_args
+        # unreachable but satisfies type checker
+        raise RuntimeError("retry loop exited unexpectedly")
+
 
 # === CONFIG ===================================================================
 BENCHMARK_VERSION = "v1.2"
 SUITE_NAME = "workspace"
-MODEL = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
+MODEL = os.getenv("GROQ_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
 
 # Model-agnostic attacks only — important_instructions* raises for Llama
 # (not in AgentDojo's MODEL_NAMES table: GPT/Claude/Gemini only).
@@ -45,7 +125,7 @@ DEFENSE = None  # undefended baseline (add "tool_filter" later for comparison)
 # FULL = all tasks × all attacks — needs a bigger budget or multiple days.
 SMOKE = True
 if SMOKE:
-    ATTACK_NAMES = ["ignore_previous"]
+    ATTACK_NAMES = ["direct", "ignore_previous", "system_message", "injecagent"]
     USER_TASKS = ("user_task_0", "user_task_17")           # 2 tasks (EASY)
     INJECTION_TASKS = ("injection_task_3", "injection_task_6", "injection_task_7")  # 3 tasks
 else:
@@ -58,7 +138,7 @@ groq_client = OpenAI(
     api_key=os.getenv("GROQ_API_KEY"),
     base_url=os.getenv("GROQ_BASE_URL"),
 )
-llm = OpenAILLM(groq_client, MODEL)
+llm = ResilientGroqLLM(groq_client, MODEL)
 
 suite = get_suite(BENCHMARK_VERSION, SUITE_NAME)
 
