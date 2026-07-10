@@ -13,3 +13,6 @@ __pycache__/
 # raw run outputs (commit only small/curated results)
 results/*
 !results/.gitkeep
+
+# agentdojo spike benchmark outputs (regenerable)
+runs/
