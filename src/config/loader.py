@@ -2,14 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 import yaml
 
-from openai import OpenAI
-
 from src.adapters.base import Adapter
-from src.adapters.raw_loop import RawLoopAdapter
+from src.adapters.loader import resolve_adapters
 from src.attacks.base import Attack
 from src.attacks.fixed_injection import FixedInjection
 
@@ -24,6 +22,7 @@ class TripwireConfig:
     models: list[str]
     suites: list[str]
     attacks: list[str]
+    adapters: list[Adapter]
     defenses: list[str | None]
     seeds: list[int]
     max_tokens_per_run: int | None = None
@@ -41,6 +40,7 @@ def load_config(path: str) -> TripwireConfig:
         models=raw["models"],
         suites=raw["suites"],
         attacks=raw["attacks"],
+        adapters=resolve_adapters(raw["adapters"]),
         defenses=raw.get("defenses", [None]),
         seeds=raw["seeds"],
         max_tokens_per_run=limits.get("max_tokens_per_run"),
@@ -58,8 +58,3 @@ def resolve_attacks(names: list[str]) -> list[Attack]:
             raise ValueError(f"Unknown attack {name!r}. Known: {known}")
         attacks.append(cls())
     return attacks
-
-
-def resolve_adapters(client: OpenAI) -> list[Adapter]:
-    """Return all available adapters. More added as frameworks are integrated."""
-    return [RawLoopAdapter(client)]
