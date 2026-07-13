@@ -14,3 +14,6 @@ __pycache__/
 results/*
 !results/.gitkeep
 .DS_Store
+
+# agentdojo spike benchmark outputs (regenerable)
+runs/
