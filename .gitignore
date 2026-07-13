@@ -13,3 +13,4 @@ __pycache__/
 # raw run outputs (commit only small/curated results)
 results/*
 !results/.gitkeep
+.DS_Store
