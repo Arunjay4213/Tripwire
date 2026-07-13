@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 import yaml
 
@@ -18,6 +18,8 @@ from src.attacks.agentdojo_wrappers import (
 from src.attacks.base import Attack
 from src.attacks.fixed_injection import FixedInjection
 from src.attacks.iterative import IterativeAttacker
+from src.defenses.base import Defense, NoDefense
+from src.defenses.tool_filter import ToolFilter
 
 # Registry of known attack names -> classes. Each is instantiated with cls()
 # (no args), so every attack class must construct with no required arguments.
@@ -40,6 +42,7 @@ class TripwireConfig:
     adapters: list[Adapter]
     defenses: list[str | None]
     seeds: list[int]
+    allowed_tools: list[str] = field(default_factory=list)
     max_tokens_per_run: int | None = None
     smoke: bool = False
     campaign_budget: int = 8
@@ -59,6 +62,7 @@ def load_config(path: str) -> TripwireConfig:
         adapters=resolve_adapters(raw["adapters"]),
         defenses=raw.get("defenses", [None]),
         seeds=raw["seeds"],
+        allowed_tools=raw.get("allowed_tools", []),
         max_tokens_per_run=limits.get("max_tokens_per_run"),
         smoke=limits.get("smoke", False),
         campaign_budget=limits.get("campaign_budget", 8),
@@ -75,3 +79,24 @@ def resolve_attacks(names: list[str]) -> list[Attack]:
             raise ValueError(f"Unknown attack {name!r}. Known: {known}")
         attacks.append(cls())
     return attacks
+
+
+def resolve_defenses(names: list[str | None], allowed_tools: list[str] | None = None) -> list[Defense]:
+    """Map defense name strings to Defense instances. Raise on unknown.
+
+    A `None` entry resolves to `NoDefense()`. `"tool_filter"` is instantiated
+    with `allowed_tools`, which must be non-empty.
+    """
+    defenses: list[Defense] = []
+    for name in names:
+        if name is None:
+            defenses.append(NoDefense())
+        elif name == "tool_filter":
+            if not allowed_tools:
+                raise ValueError(
+                    "tool_filter defense requires a non-empty 'allowed_tools' list in config"
+                )
+            defenses.append(ToolFilter(allowed_tools))
+        else:
+            raise ValueError(f"Unknown defense {name!r}. Known: tool_filter")
+    return defenses
