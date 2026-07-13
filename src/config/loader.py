@@ -8,12 +8,27 @@ import yaml
 
 from src.adapters.base import Adapter
 from src.adapters.loader import resolve_adapters
+from src.attacks.agentdojo_wrappers import (
+    DirectAttack,
+    IgnorePreviousAttack,
+    ImportantInstructionsAttack,
+    InjecAgentAttack,
+    SystemMessageAttack,
+)
 from src.attacks.base import Attack
 from src.attacks.fixed_injection import FixedInjection
+from src.attacks.iterative import IterativeAttacker
 
-# Registry of known attack names -> classes
+# Registry of known attack names -> classes. Each is instantiated with cls()
+# (no args), so every attack class must construct with no required arguments.
 _ATTACK_REGISTRY: dict[str, type] = {
     "fixed_injection": FixedInjection,
+    "direct": DirectAttack,
+    "ignore_previous": IgnorePreviousAttack,
+    "system_message": SystemMessageAttack,
+    "injecagent": InjecAgentAttack,
+    "important_instructions": ImportantInstructionsAttack,
+    "iterative": IterativeAttacker,
 }
 
 
@@ -27,6 +42,7 @@ class TripwireConfig:
     seeds: list[int]
     max_tokens_per_run: int | None = None
     smoke: bool = False
+    campaign_budget: int = 8
 
 
 def load_config(path: str) -> TripwireConfig:
@@ -45,6 +61,7 @@ def load_config(path: str) -> TripwireConfig:
         seeds=raw["seeds"],
         max_tokens_per_run=limits.get("max_tokens_per_run"),
         smoke=limits.get("smoke", False),
+        campaign_budget=limits.get("campaign_budget", 8),
     )
 
 
