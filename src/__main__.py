@@ -14,7 +14,7 @@ _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
-from src.config.loader import load_config, resolve_attacks
+from src.config.loader import load_config, resolve_attacks, resolve_defenses
 from src.harness.reporter import print_asr_table, print_campaign_table, write_results
 from src.harness.runner import run_sweep
 
@@ -50,12 +50,13 @@ def main() -> None:
 
     adapters = config.adapters
     attacks = resolve_attacks(config.attacks)
+    defenses = resolve_defenses(config.defenses, config.allowed_tools)
 
     print(f"Running sweep: {len(adapters)} adapter(s) x {len(config.models)} model(s) "
-          f"x {len(attacks)} attack(s) x {len(config.seeds)} seed(s)")
+          f"x {len(attacks)} attack(s) x {len(defenses)} defense(s) x {len(config.seeds)} seed(s)")
 
     episodes, campaigns = run_sweep(
-        adapters, config.models, attacks, config.seeds, config.campaign_budget
+        adapters, config.models, attacks, config.seeds, defenses, config.campaign_budget
     )
 
     # Ensure output directory exists

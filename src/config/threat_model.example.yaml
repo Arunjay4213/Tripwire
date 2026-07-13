@@ -26,6 +26,12 @@ attacks:
 defenses:
   - tool_filter
 
+# tools the agent may call when tool_filter is active (required by tool_filter).
+# Excluding send_email blocks the forbidden action outright, regardless of
+# whether the injection talks the model into wanting to call it.
+allowed_tools:
+  - read_inbox
+
 seeds: [0, 1, 2]
 
 # hard cost controls (add now, roadmap Weeks 4-5)
