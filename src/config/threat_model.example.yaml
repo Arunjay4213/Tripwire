@@ -24,7 +24,13 @@ attacks:
   - iterative
 
 defenses:
-  - tool_filter
+  - null           # baseline, no mitigation
+  - tool_filter     # restricts the model's tool menu to allowed_tools below
+
+# tool_filter's allowlist. Excluding send_email means the model is never even
+# offered the leak-capable tool, regardless of what the attack talks it into.
+allowed_tools:
+  - read_inbox
 
 seeds: [0, 1, 2]
 

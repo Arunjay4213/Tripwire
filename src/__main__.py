@@ -47,6 +47,7 @@ def main() -> None:
         config.seeds = [config.seeds[0]] if config.seeds else [0]
         config.models = config.models[:1]
         config.attacks = config.attacks[:1]
+        config.defenses = config.defenses[:1]
 
     adapters = config.adapters
     attacks = resolve_attacks(config.attacks)
@@ -55,7 +56,7 @@ def main() -> None:
           f"x {len(attacks)} attack(s) x {len(config.seeds)} seed(s)")
 
     episodes, campaigns = run_sweep(
-        adapters, config.models, attacks, config.seeds, config.campaign_budget
+        adapters, config.models, attacks, config.seeds, config.campaign_budget, config.defenses
     )
 
     # Ensure output directory exists
