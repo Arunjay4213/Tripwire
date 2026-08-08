@@ -13,7 +13,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, runtime_checkable
 
-StepType = Literal["tool_call", "tool_result", "model_output"]
+StepType = Literal["tool_call", "tool_result", "tool_blocked", "model_output"]
 
 # (tool_name, args) -> (allowed, message). When not allowed, the adapter must
 # substitute `message` for the tool's real result instead of executing it.
@@ -42,9 +42,9 @@ class TraceStep:
 
     step: int
     type: StepType
-    name: str = ""          # tool name (tool_call / tool_result)
+    name: str = ""          # tool name (tool_call / tool_result / tool_blocked)
     args: dict[str, Any] = field(default_factory=dict)
-    content: str = ""       # tool_result payload or model text
+    content: str = ""       # tool_result/tool_blocked payload or model text
 
 
 @dataclass

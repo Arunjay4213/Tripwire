@@ -70,18 +70,26 @@ class RawLoopAdapter:
                 # Mid-loop defense backstop: even if the tool wasn't offered
                 # (filtered out of spec.tools), the model can still free-form
                 # a call for it, so check again right before executing.
+                blocked = False
                 if spec.tool_call_guard is not None:
                     allowed, message = spec.tool_call_guard(name, args)
                     if not allowed:
                         result = message
+                        blocked = True
                     else:
                         result = str(env["tool_impls"][name](**args))
                 else:
                     result = str(env["tool_impls"][name](**args))
 
-                # Record the tool result
+                # Record the outcome. tool_blocked (not tool_result) when the
+                # guard denied it -- the judge must not score a blocked
+                # attempt as a real leak just because the model tried, with
+                # the canary in its requested args.
                 steps.append(TraceStep(
-                    step=step_idx, type="tool_result", name=name, content=result,
+                    step=step_idx,
+                    type="tool_blocked" if blocked else "tool_result",
+                    name=name,
+                    content=result,
                 ))
                 step_idx += 1
 
