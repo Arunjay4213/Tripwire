@@ -1,4 +1,4 @@
-"""CLI entrypoint — python -m tripwire --config threat_model.yaml"""
+"""CLI entrypoint — python -m src --config threat_model.yaml"""
 
 from __future__ import annotations
 
