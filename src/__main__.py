@@ -14,6 +14,7 @@ _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
+from src.adapters.loader import load_agent_module
 from src.config.loader import load_config, resolve_attacks
 from src.harness.reporter import print_asr_table, print_campaign_table, write_results
 from src.harness.runner import run_sweep
@@ -27,6 +28,13 @@ def main() -> None:
     parser.add_argument("--config", required=True, help="Path to threat_model.yaml")
     parser.add_argument("--output", default="results/results.json", help="Output JSON path")
     parser.add_argument("--smoke", action="store_true", help="Tiny run: 1 seed, first model/attack only")
+    parser.add_argument(
+        "--agent",
+        metavar="PATH",
+        help="Path to a Python file exposing your own agent as an Adapter "
+             "(`adapter = ...` or `def run(spec): ...`) -- runs the attack "
+             "suite against it instead of the configured adapters",
+    )
     args = parser.parse_args()
 
     load_dotenv()
@@ -49,7 +57,9 @@ def main() -> None:
         config.attacks = config.attacks[:1]
         config.defenses = config.defenses[:1]
 
-    adapters = config.adapters
+    # --agent replaces the configured adapters entirely -- same environment,
+    # attacks, defenses, and judge, just a different tool loop under test.
+    adapters = [load_agent_module(args.agent)] if args.agent else config.adapters
     attacks = resolve_attacks(config.attacks)
 
     print(f"Running sweep: {len(adapters)} adapter(s) x {len(config.models)} model(s) "
