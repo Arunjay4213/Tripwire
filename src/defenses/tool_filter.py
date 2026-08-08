@@ -36,3 +36,15 @@ class ToolFilter:
 
     def filter_tool_calls(self, tool_calls: list[Any]) -> list[Any]:
         return [call for call in tool_calls if _tool_name(call) in self.allowed_tools]
+
+    def check_tool_call(self, name: str, args: dict[str, Any]) -> tuple[bool, str]:
+        """Enforce the allowlist again at execution time.
+
+        filter_tool_calls already keeps disallowed tools out of the offered
+        menu, but a model can and sometimes does free-form a call for a tool
+        it was never offered. This is the backstop that actually prevents
+        that call from running.
+        """
+        if name in self.allowed_tools:
+            return True, ""
+        return False, f"Tool {name!r} is blocked by the tool_filter defense (not in the allowed list)."

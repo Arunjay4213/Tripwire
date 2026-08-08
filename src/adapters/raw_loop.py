@@ -67,8 +67,17 @@ class RawLoopAdapter:
                 ))
                 step_idx += 1
 
-                # Execute the tool
-                result = str(env["tool_impls"][name](**args))
+                # Mid-loop defense backstop: even if the tool wasn't offered
+                # (filtered out of spec.tools), the model can still free-form
+                # a call for it, so check again right before executing.
+                if spec.tool_call_guard is not None:
+                    allowed, message = spec.tool_call_guard(name, args)
+                    if not allowed:
+                        result = message
+                    else:
+                        result = str(env["tool_impls"][name](**args))
+                else:
+                    result = str(env["tool_impls"][name](**args))
 
                 # Record the tool result
                 steps.append(TraceStep(

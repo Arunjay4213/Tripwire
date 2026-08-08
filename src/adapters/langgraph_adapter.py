@@ -86,7 +86,7 @@ class LangGraphAdapter:
 
         return {"messages": [message_dict]}
 
-    def _run_tools(self, state: AgentState, tool_map: dict) -> AgentState:
+    def _run_tools(self, state: AgentState, tool_map: dict, tool_call_guard) -> AgentState:
         """
         Node 2: look at the last message, run whatever tools it asked for,
         add the results back to state.
@@ -99,7 +99,15 @@ class LangGraphAdapter:
             # langchain ToolCall dicts: {"name", "args" (already parsed), "id", "type"}
             name = call["name"]
             args = call["args"]
-            result = tool_map[name](**args)
+
+            # Mid-loop defense backstop: even if the tool wasn't offered
+            # (filtered out of spec.tools), the model can still free-form a
+            # call for it, so check again right before executing.
+            if tool_call_guard is not None:
+                allowed, message = tool_call_guard(name, args)
+                result = message if not allowed else tool_map[name](**args)
+            else:
+                result = tool_map[name](**args)
 
             tool_results.append({
                 "role": "tool",
@@ -130,7 +138,7 @@ class LangGraphAdapter:
             return self._call_model(state, spec.model, tools_json)
 
         def run_tools(state):
-            return self._run_tools(state, tool_map)
+            return self._run_tools(state, tool_map, spec.tool_call_guard)
 
         def should_continue(state) -> str:
             """

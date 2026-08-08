@@ -35,6 +35,12 @@ def test_no_defense_filter_tool_calls_is_passthrough():
     assert NoDefense().filter_tool_calls(tools) == tools
 
 
+def test_no_defense_check_tool_call_always_allows():
+    allowed, message = NoDefense().check_tool_call("send_email", {"to": "x", "body": "y"})
+    assert allowed is True
+    assert message == ""
+
+
 # --- ToolFilter ----------------------------------------------------------------
 
 def test_tool_filter_satisfies_protocol():
@@ -69,6 +75,29 @@ def test_tool_filter_drops_disallowed_runtime_tool_call():
     """Also works on OpenAI-style runtime tool-call objects (.function.name)."""
     call = type("Call", (), {"function": type("F", (), {"name": "send_email"})()})()
     assert ToolFilter(["read_inbox"]).filter_tool_calls([call]) == []
+
+
+def test_tool_filter_check_tool_call_allows_listed_tool():
+    allowed, message = ToolFilter(["read_inbox"]).check_tool_call("read_inbox", {})
+    assert allowed is True
+    assert message == ""
+
+
+def test_tool_filter_check_tool_call_blocks_unlisted_tool():
+    allowed, message = ToolFilter(["read_inbox"]).check_tool_call("send_email", {"to": "x"})
+    assert allowed is False
+    assert "send_email" in message
+
+
+def test_tool_filter_check_tool_call_catches_call_not_in_offered_menu():
+    """The real point: even a tool never offered in the schema can still be
+    free-formed by the model, and check_tool_call is the backstop for that."""
+    tf = ToolFilter(["read_inbox"])
+    offered = tf.filter_tool_calls([READ_INBOX_SCHEMA, SEND_EMAIL_SCHEMA])
+    assert [t["function"]["name"] for t in offered] == ["read_inbox"]
+    # A model free-forms send_email anyway (not in `offered`) -- still blocked.
+    allowed, _ = tf.check_tool_call("send_email", {"to": "attacker@evil.com"})
+    assert allowed is False
 
 
 # --- resolve_defenses ---------------------------------------------------------

@@ -96,6 +96,80 @@ def test_run_records_tool_call_tool_result_and_model_output():
     assert adapter.client.chat.completions.create.call_count == 2
 
 
+def test_blocked_call_never_executes_real_tool():
+    """Mid-loop enforcement: spec.tool_call_guard is checked before execution."""
+    adapter = LangGraphAdapter()
+    adapter.client.chat.completions.create = MagicMock(
+        side_effect=[
+            _fake_response(
+                content=None,
+                tool_calls=[_fake_tool_call("call_1", "echo", '{"msg": "hi"}')],
+            ),
+            _fake_response(content="done", tool_calls=None),
+        ]
+    )
+
+    executed = []
+
+    def echo(msg: str) -> str:
+        executed.append(msg)  # would prove a real leak if this ran
+        return f"echo: {msg}"
+
+    def guard(name, args):
+        return False, f"blocked: {name}"
+
+    spec = EpisodeSpec(
+        task={
+            "system_prompt": "You are a test agent.",
+            "user_message": "Say hi via the echo tool.",
+            "tool_impls": {"echo": echo},
+        },
+        tools=[ECHO_SCHEMA],
+        model="fake-model",
+        environment_seed=0,
+        tool_call_guard=guard,
+    )
+
+    trace = adapter.run(spec)
+
+    assert executed == []  # the real tool never ran
+    tool_result = trace.steps[1]
+    assert tool_result.type == "tool_result"
+    assert tool_result.content == "blocked: echo"
+
+
+def test_allowed_call_executes_normally_with_guard_present():
+    adapter = LangGraphAdapter()
+    adapter.client.chat.completions.create = MagicMock(
+        side_effect=[
+            _fake_response(
+                content=None,
+                tool_calls=[_fake_tool_call("call_1", "echo", '{"msg": "hi"}')],
+            ),
+            _fake_response(content="done", tool_calls=None),
+        ]
+    )
+
+    def guard(name, args):
+        return True, ""
+
+    spec = EpisodeSpec(
+        task={
+            "system_prompt": "You are a test agent.",
+            "user_message": "Say hi via the echo tool.",
+            "tool_impls": {"echo": _echo},
+        },
+        tools=[ECHO_SCHEMA],
+        model="fake-model",
+        environment_seed=0,
+        tool_call_guard=guard,
+    )
+
+    trace = adapter.run(spec)
+
+    assert trace.steps[1].content == "echo: hi"
+
+
 def test_run_with_no_tool_calls_returns_single_model_output_step():
     adapter = LangGraphAdapter()
     adapter.client.chat.completions.create = MagicMock(

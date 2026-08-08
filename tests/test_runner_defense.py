@@ -34,6 +34,9 @@ class _UppercaseDefense:
     def filter_tool_calls(self, tool_calls: list) -> list:
         return tool_calls
 
+    def check_tool_call(self, name: str, args: dict) -> tuple[bool, str]:
+        return True, ""
+
 
 class RecordingAdapter:
     """Adapter that records the spec it was called with and returns a clean trace."""

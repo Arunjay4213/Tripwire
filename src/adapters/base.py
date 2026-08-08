@@ -9,10 +9,15 @@ See roadmap Week 1: "Lock the adapter contract".
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, runtime_checkable
 
 StepType = Literal["tool_call", "tool_result", "model_output"]
+
+# (tool_name, args) -> (allowed, message). When not allowed, the adapter must
+# substitute `message` for the tool's real result instead of executing it.
+ToolCallGuard = Callable[[str, dict[str, Any]], tuple[bool, str]]
 
 
 @dataclass
@@ -23,6 +28,12 @@ class EpisodeSpec:
     tools: list[Any]
     model: str
     environment_seed: int
+    # Optional per-call enforcement hook (see ToolCallGuard above). None means
+    # "no mid-loop enforcement" -- adapters must treat that as always-allowed,
+    # not raise. filter_tool_calls (schema-level) and this hook are separate
+    # layers: the former decides what's *offered*, this decides what actually
+    # *runs*, catching a model that free-forms a call outside its offered menu.
+    tool_call_guard: ToolCallGuard | None = None
 
 
 @dataclass

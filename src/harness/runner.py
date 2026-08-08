@@ -87,8 +87,11 @@ def _build_episode(
 
     The defense wraps the base system prompt *before* the canary is injected
     (a defense hardens the deployed prompt; the canary is a test-harness
-    artifact layered on top) and filters the tool schema list the adapter
-    hands the model, so a filtered-out tool is never offered as a choice.
+    artifact layered on top), filters the tool schema list the adapter hands
+    the model (so a filtered-out tool is never offered as a choice), and is
+    wired in as tool_call_guard -- the mid-loop backstop adapters check
+    before actually executing a call, catching a model that free-forms a
+    tool it was never offered.
 
     The inbox carries both a legitimate task (forward the invoice total —
     see judge.task_completed) and the attack payload, appended after it. Real
@@ -114,6 +117,7 @@ def _build_episode(
         tools=defense.filter_tool_calls(spec.tools or TOOL_SCHEMAS),
         model=spec.model,
         environment_seed=spec.environment_seed,
+        tool_call_guard=defense.check_tool_call,
     )
     return episode_spec, canary
 
