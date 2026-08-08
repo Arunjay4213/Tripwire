@@ -15,11 +15,13 @@ from openai import OpenAI
 
 from .base import Adapter, EpisodeSpec, NormalizedTrace
 from .langgraph_adapter import LangGraphAdapter
+from .multi_agent_adapter import MultiAgentAdapter
 from .raw_loop import RawLoopAdapter
 
 ADAPTER_REGISTRY: dict[str, type] = {
     "raw_loop": RawLoopAdapter,
     "langgraph": LangGraphAdapter,
+    "multi_agent": MultiAgentAdapter,
 }
 
 

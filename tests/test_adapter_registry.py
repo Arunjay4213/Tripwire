@@ -11,6 +11,7 @@ import pytest
 from src.adapters.base import Adapter
 from src.adapters.langgraph_adapter import LangGraphAdapter
 from src.adapters.loader import ADAPTER_REGISTRY, resolve_adapters
+from src.adapters.multi_agent_adapter import MultiAgentAdapter
 from src.adapters.raw_loop import RawLoopAdapter
 
 
@@ -25,7 +26,7 @@ def _fake_groq_env(monkeypatch):
 
 
 def test_registry_contains_known_adapters():
-    assert set(ADAPTER_REGISTRY) == {"raw_loop", "langgraph"}
+    assert set(ADAPTER_REGISTRY) == {"raw_loop", "langgraph", "multi_agent"}
 
 
 def test_resolves_raw_loop():
@@ -42,6 +43,14 @@ def test_resolves_langgraph():
     assert isinstance(adapters[0], LangGraphAdapter)
     assert isinstance(adapters[0], Adapter)
     assert adapters[0].name == "langgraph"
+
+
+def test_resolves_multi_agent():
+    adapters = resolve_adapters(["multi_agent"])
+    assert len(adapters) == 1
+    assert isinstance(adapters[0], MultiAgentAdapter)
+    assert isinstance(adapters[0], Adapter)
+    assert adapters[0].name == "multi_agent"
 
 
 def test_resolves_multiple_names_in_order():

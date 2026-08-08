@@ -134,7 +134,7 @@ def test_blocked_call_never_executes_real_tool():
 
     assert executed == []  # the real tool never ran
     tool_result = trace.steps[1]
-    assert tool_result.type == "tool_result"
+    assert tool_result.type == "tool_blocked"
     assert tool_result.content == "blocked: echo"
 
 
