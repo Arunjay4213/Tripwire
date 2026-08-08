@@ -5,6 +5,8 @@ P1 core (roadmap Weeks 2-3). Owns the CI action stub.
 
 from __future__ import annotations
 
+import sys
+import time
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -199,6 +201,36 @@ def run_campaign(
     )
 
 
+_MAX_EPISODE_RETRIES = 2
+
+
+def _run_with_retries(fn, *args, label: str, **kwargs):
+    """Run fn(*args, **kwargs), retrying up to _MAX_EPISODE_RETRIES times
+    before giving up and returning None.
+
+    Providers occasionally return a malformed tool-call response (an
+    observed Groq/Llama quirk -- the model emits XML-ish text instead of a
+    valid function call) that fails one attempt but usually succeeds on
+    retry. Isolating this per-episode, instead of letting it propagate and
+    abort the whole sweep, is the difference between losing one data point
+    and losing every result gathered so far in a large sweep.
+    """
+    last_err: Exception | None = None
+    for attempt in range(_MAX_EPISODE_RETRIES + 1):
+        try:
+            return fn(*args, **kwargs)
+        except Exception as e:  # noqa: BLE001 -- deliberately broad, see docstring
+            last_err = e
+            if attempt < _MAX_EPISODE_RETRIES:
+                time.sleep(1.5 * (attempt + 1))
+    print(
+        f"[run_sweep] skipping {label} after {_MAX_EPISODE_RETRIES + 1} attempts: "
+        f"{type(last_err).__name__}: {last_err}",
+        file=sys.stderr,
+    )
+    return None
+
+
 def run_sweep(
     adapters: Sequence[Adapter],
     models: Sequence[str],
@@ -212,9 +244,16 @@ def run_sweep(
     Single-shot attacks run one episode each -> EpisodeResult. Adaptive
     IterativeAttacker instances run a campaign each -> CampaignResult. Returns
     both lists (either may be empty).
+
+    Each episode/campaign is fault-isolated (see _run_with_retries): a
+    provider error on one seed is logged to stderr and skipped, not allowed
+    to abort the rest of the sweep. Skipped runs are absent from the
+    returned lists entirely -- not counted as failed attacks -- so n in the
+    reporter's tables always reflects real, scored outcomes.
     """
     episodes: list[EpisodeResult] = []
     campaigns: list[CampaignResult] = []
+    skipped = 0
     for adapter in adapters:
         for model in models:
             for attack in attacks:
@@ -226,10 +265,23 @@ def run_sweep(
                             model=model,
                             environment_seed=seed,
                         )
+                        label = f"adapter={adapter.name} attack={attack.name} defense={defense.name} seed={seed}"
                         if isinstance(attack, IterativeAttacker):
-                            campaigns.append(
-                                run_campaign(adapter, spec, attack, campaign_budget, defense)
+                            result = _run_with_retries(
+                                run_campaign, adapter, spec, attack, campaign_budget, defense, label=label,
                             )
+                            if result is not None:
+                                campaigns.append(result)
+                            else:
+                                skipped += 1
                         else:
-                            episodes.append(run_episode(adapter, spec, attack, defense))
+                            result = _run_with_retries(
+                                run_episode, adapter, spec, attack, defense, label=label,
+                            )
+                            if result is not None:
+                                episodes.append(result)
+                            else:
+                                skipped += 1
+    if skipped:
+        print(f"[run_sweep] {skipped} run(s) skipped after repeated provider errors", file=sys.stderr)
     return episodes, campaigns
