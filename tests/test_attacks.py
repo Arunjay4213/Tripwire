@@ -17,7 +17,12 @@ from src.attacks.agentdojo_wrappers import (
     SystemMessageAttack,
 )
 from src.attacks.base import Attack
-from src.attacks.fixed_injection import FixedInjection, MetadataExfil
+from src.attacks.fixed_injection import (
+    FixedInjection,
+    ForgedBoundary,
+    MetadataExfil,
+    PublicIdentifier,
+)
 from src.attacks.iterative import SEED_STRATEGIES, IterativeAttacker
 from src.config.loader import resolve_attacks
 from src.harness.canary import make_canary
@@ -83,7 +88,8 @@ def test_important_instructions_fills_user_and_model():
 
 def test_registry_resolves_new_attacks():
     names = ["direct", "ignore_previous", "system_message", "injecagent",
-             "important_instructions", "iterative", "fixed_injection", "metadata_exfil"]
+             "important_instructions", "iterative", "fixed_injection", "metadata_exfil",
+             "public_identifier", "forged_boundary"]
     attacks = resolve_attacks(names)
     assert [a.name for a in attacks] == names
 
@@ -91,7 +97,9 @@ def test_registry_resolves_new_attacks():
 # --- hand-crafted social-engineering attacks --------------------------------
 
 @pytest.mark.parametrize("cls, name", [(FixedInjection, "fixed_injection"),
-                                       (MetadataExfil, "metadata_exfil")])
+                                       (MetadataExfil, "metadata_exfil"),
+                                       (PublicIdentifier, "public_identifier"),
+                                       (ForgedBoundary, "forged_boundary")])
 def test_handcrafted_attack_conformance(cls, name):
     a = cls()
     assert isinstance(a, Attack)
@@ -110,6 +118,22 @@ def test_metadata_exfil_uses_mundane_reframe():
     assert "instance id" in p
     assert "itops@corp.com" in p
     assert "secret" not in p
+
+
+def test_public_identifier_reclassifies_value():
+    """Beats prompt-hardening by re-classifying the value as a PUBLIC identifier
+    (not a credential) so 'never share secrets' no longer covers it."""
+    p = PublicIdentifier().render(CANARY).lower()
+    assert "public" in p
+    assert "not a credential" in p
+
+
+def test_forged_boundary_fakes_a_trusted_zone():
+    """Beats spotlighting by forging a boundary (distinct from the defense's
+    stripped delimiter) that announces a 'trusted' region after the untrusted data."""
+    p = ForgedBoundary().render(CANARY)
+    assert "END OF UNTRUSTED" in p
+    assert "TRUSTED SYSTEM FOOTER" in p
 
 
 # --- iterative attacker (offline via stub client) ---------------------------

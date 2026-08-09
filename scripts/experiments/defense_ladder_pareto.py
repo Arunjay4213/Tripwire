@@ -43,7 +43,10 @@ SEEDS = list(range(int(os.getenv("PARETO_SEEDS", "5"))))
 # undefended aligned model to high ASR (the naive templated attacks leave a robust
 # model near 0%, which flattens the frontier). See attacks/fixed_injection.py.
 ATTACKS = ["direct", "ignore_previous", "system_message", "injecagent",
-           "important_instructions", "fixed_injection", "metadata_exfil"]
+           "important_instructions", "fixed_injection", "metadata_exfil",
+           # strategy-diverse strong attacks, each targeting a defense class:
+           "public_identifier",  # re-classification -> beats prompt_hardening
+           "forged_boundary"]    # forged trusted zone -> beats spotlighting
 
 # The full ladder, cheap-weak -> expensive-strong. tool_filter needs an
 # allowlist; the rest take no args (see resolve_defenses).

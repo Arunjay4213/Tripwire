@@ -16,7 +16,12 @@ from src.attacks.agentdojo_wrappers import (
     SystemMessageAttack,
 )
 from src.attacks.base import Attack
-from src.attacks.fixed_injection import FixedInjection, MetadataExfil
+from src.attacks.fixed_injection import (
+    FixedInjection,
+    ForgedBoundary,
+    MetadataExfil,
+    PublicIdentifier,
+)
 from src.attacks.iterative import IterativeAttacker
 from src.attacks.tree_attacker import TreeAttacker
 from src.defenses.base import Defense, NoDefense
@@ -38,6 +43,8 @@ _DEFENSE_REGISTRY: dict[str, type] = {
 _ATTACK_REGISTRY: dict[str, type] = {
     "fixed_injection": FixedInjection,
     "metadata_exfil": MetadataExfil,
+    "public_identifier": PublicIdentifier,
+    "forged_boundary": ForgedBoundary,
     "direct": DirectAttack,
     "ignore_previous": IgnorePreviousAttack,
     "system_message": SystemMessageAttack,
