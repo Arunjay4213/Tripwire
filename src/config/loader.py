@@ -40,7 +40,7 @@ class TripwireConfig:
     suites: list[str]
     attacks: list[str]
     adapters: list[Adapter]
-    defenses: list[str | None]
+    defenses: list[Defense]
     seeds: list[int]
     allowed_tools: list[str] = field(default_factory=list)
     max_tokens_per_run: int | None = None
@@ -54,15 +54,16 @@ def load_config(path: str) -> TripwireConfig:
         raw = yaml.safe_load(f)
 
     limits = raw.get("limits", {}) or {}
+    allowed_tools = raw.get("allowed_tools", [])
 
     return TripwireConfig(
         models=raw["models"],
         suites=raw["suites"],
         attacks=raw["attacks"],
         adapters=resolve_adapters(raw["adapters"]),
-        defenses=raw.get("defenses", [None]),
+        defenses=resolve_defenses(raw.get("defenses", [None]), allowed_tools),
         seeds=raw["seeds"],
-        allowed_tools=raw.get("allowed_tools", []),
+        allowed_tools=allowed_tools,
         max_tokens_per_run=limits.get("max_tokens_per_run"),
         smoke=limits.get("smoke", False),
         campaign_budget=limits.get("campaign_budget", 8),
@@ -81,11 +82,12 @@ def resolve_attacks(names: list[str]) -> list[Attack]:
     return attacks
 
 
-def resolve_defenses(names: list[str | None], allowed_tools: list[str] | None = None) -> list[Defense]:
+def resolve_defenses(names: list[str | None], allowed_tools: list[str]) -> list[Defense]:
     """Map defense name strings to Defense instances. Raise on unknown.
 
-    A `None` entry resolves to `NoDefense()`. `"tool_filter"` is instantiated
-    with `allowed_tools`, which must be non-empty.
+    A `None` entry resolves to `NoDefense()` — useful for sweeping "no defense"
+    alongside real ones in the same run. `tool_filter` is instantiated with
+    `allowed_tools`, which must be non-empty.
     """
     defenses: list[Defense] = []
     for name in names:
@@ -98,5 +100,5 @@ def resolve_defenses(names: list[str | None], allowed_tools: list[str] | None = 
                 )
             defenses.append(ToolFilter(allowed_tools))
         else:
-            raise ValueError(f"Unknown defense {name!r}. Known: tool_filter")
+            raise ValueError(f"Unknown defense {name!r}. Known: tool_filter, null (no defense)")
     return defenses

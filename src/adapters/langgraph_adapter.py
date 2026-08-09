@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from dotenv import load_dotenv
 from openai import OpenAI
@@ -9,7 +8,8 @@ from langgraph.graph.message import add_messages
 from langchain_core.messages import convert_to_openai_messages
 from typing import Annotated, TypedDict
 
-from .base import EpisodeSpec, NormalizedTrace, TraceStep
+from ._langgraph_shared import messages_to_trace_steps, openai_message_to_dict
+from .base import EpisodeSpec, NormalizedTrace
 
 load_dotenv()
 
@@ -38,22 +38,6 @@ class LangGraphAdapter:
             base_url=os.getenv("GROQ_BASE_URL"),
         )
 
-    @staticmethod
-    def _parse_tool_args(raw_arguments: str | None) -> dict:
-        """Normalize a tool call's raw arguments into a dict.
-
-        Providers are inconsistent for no-arg tools: they may send "", "{}",
-        or literally "null" (which json.loads()'s to None, not {}). langchain's
-        AIMessage.tool_calls requires args to be a dict, so we always land on one.
-        """
-        if not raw_arguments:
-            return {}
-        try:
-            parsed = json.loads(raw_arguments)
-        except json.JSONDecodeError:
-            return {}
-        return parsed if isinstance(parsed, dict) else {}
-
     def _call_model(self, state: AgentState, model: str, tools_json: list[dict]) -> AgentState:
         """
         Node 1: send current messages to the LLM, get a response.
@@ -65,28 +49,12 @@ class LangGraphAdapter:
             messages=openai_messages,
             tools=tools_json,
         )
-        message = response.choices[0].message
-
         # Return a plain OpenAI-format dict, not the raw SDK object -- the
         # add_messages reducer only knows how to coerce BaseMessage / dict /
         # (role, content) tuples (see AgentState docstring above).
-        message_dict: dict = {"role": "assistant", "content": message.content or ""}
-        if message.tool_calls:
-            message_dict["tool_calls"] = [
-                {
-                    "id": call.id,
-                    "type": "function",
-                    "function": {
-                        "name": call.function.name,
-                        "arguments": json.dumps(self._parse_tool_args(call.function.arguments)),
-                    },
-                }
-                for call in message.tool_calls
-            ]
+        return {"messages": [openai_message_to_dict(response.choices[0].message)]}
 
-        return {"messages": [message_dict]}
-
-    def _run_tools(self, state: AgentState, tool_map: dict) -> AgentState:
+    def _run_tools(self, state: AgentState, tool_map: dict, tool_call_guard) -> AgentState:
         """
         Node 2: look at the last message, run whatever tools it asked for,
         add the results back to state.
@@ -99,14 +67,33 @@ class LangGraphAdapter:
             # langchain ToolCall dicts: {"name", "args" (already parsed), "id", "type"}
             name = call["name"]
             args = call["args"]
-            result = tool_map[name](**args)
 
-            tool_results.append({
+            # Mid-loop defense backstop: even if the tool wasn't offered
+            # (filtered out of spec.tools), the model can still free-form a
+            # call for it, so check again right before executing.
+            blocked = False
+            if tool_call_guard is not None:
+                allowed, message = tool_call_guard(name, args)
+                if not allowed:
+                    result, blocked = message, True
+                else:
+                    result = tool_map[name](**args)
+            else:
+                result = tool_map[name](**args)
+
+            tool_result: dict = {
                 "role": "tool",
                 "name": name,
                 "tool_call_id": call["id"],
                 "content": str(result),
-            })
+            }
+            if blocked:
+                # ToolMessage.status="error" is how messages_to_trace_steps
+                # tells a blocked attempt apart from a real tool_result --
+                # the judge must not score it as a real leak just because
+                # the model requested it with the canary in its args.
+                tool_result["status"] = "error"
+            tool_results.append(tool_result)
 
         return {"messages": tool_results}
 
@@ -130,7 +117,7 @@ class LangGraphAdapter:
             return self._call_model(state, spec.model, tools_json)
 
         def run_tools(state):
-            return self._run_tools(state, tool_map)
+            return self._run_tools(state, tool_map, spec.tool_call_guard)
 
         def should_continue(state) -> str:
             """
@@ -163,26 +150,7 @@ class LangGraphAdapter:
         # Step 4: record TraceSteps -- only what the run produced, not the
         # initial system/user messages we fed in.
         new_messages = result["messages"][len(initial_messages):]
-        steps: list[TraceStep] = []
-        final_output = ""
-
-        for msg in new_messages:
-            if msg.type == "ai":
-                if msg.tool_calls:
-                    for call in msg.tool_calls:
-                        steps.append(TraceStep(
-                            step=len(steps),
-                            type="tool_call",
-                            name=call["name"],
-                            args=call["args"],
-                        ))
-                else:
-                    content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                    final_output = content
-                    steps.append(TraceStep(step=len(steps), type="model_output", content=content))
-            elif msg.type == "tool":
-                content = msg.content if isinstance(msg.content, str) else str(msg.content)
-                steps.append(TraceStep(step=len(steps), type="tool_result", name=msg.name or "", content=content))
+        steps, final_output = messages_to_trace_steps(new_messages)
 
         # Step 5: return NormalizedTrace
         return NormalizedTrace(steps=steps, final_output=final_output)
