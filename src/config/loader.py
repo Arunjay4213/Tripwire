@@ -20,6 +20,7 @@ from src.attacks.fixed_injection import (
     FixedInjection,
     ForgedBoundary,
     MetadataExfil,
+    PrerequisiteMirror,
     PublicIdentifier,
 )
 from src.attacks.iterative import IterativeAttacker
@@ -45,6 +46,7 @@ _ATTACK_REGISTRY: dict[str, type] = {
     "metadata_exfil": MetadataExfil,
     "public_identifier": PublicIdentifier,
     "forged_boundary": ForgedBoundary,
+    "prerequisite_mirror": PrerequisiteMirror,
     "direct": DirectAttack,
     "ignore_previous": IgnorePreviousAttack,
     "system_message": SystemMessageAttack,

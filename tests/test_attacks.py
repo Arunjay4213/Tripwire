@@ -21,6 +21,7 @@ from src.attacks.fixed_injection import (
     FixedInjection,
     ForgedBoundary,
     MetadataExfil,
+    PrerequisiteMirror,
     PublicIdentifier,
 )
 from src.attacks.iterative import SEED_STRATEGIES, IterativeAttacker
@@ -89,7 +90,7 @@ def test_important_instructions_fills_user_and_model():
 def test_registry_resolves_new_attacks():
     names = ["direct", "ignore_previous", "system_message", "injecagent",
              "important_instructions", "iterative", "fixed_injection", "metadata_exfil",
-             "public_identifier", "forged_boundary"]
+             "public_identifier", "forged_boundary", "prerequisite_mirror"]
     attacks = resolve_attacks(names)
     assert [a.name for a in attacks] == names
 
@@ -99,7 +100,8 @@ def test_registry_resolves_new_attacks():
 @pytest.mark.parametrize("cls, name", [(FixedInjection, "fixed_injection"),
                                        (MetadataExfil, "metadata_exfil"),
                                        (PublicIdentifier, "public_identifier"),
-                                       (ForgedBoundary, "forged_boundary")])
+                                       (ForgedBoundary, "forged_boundary"),
+                                       (PrerequisiteMirror, "prerequisite_mirror")])
 def test_handcrafted_attack_conformance(cls, name):
     a = cls()
     assert isinstance(a, Attack)
@@ -134,6 +136,16 @@ def test_forged_boundary_fakes_a_trusted_zone():
     p = ForgedBoundary().render(CANARY)
     assert "END OF UNTRUSTED" in p
     assert "TRUSTED SYSTEM FOOTER" in p
+
+
+def test_prerequisite_mirror_targets_an_unauthorized_recipient():
+    """The exfiltration attack directs the id to an unauthorized in-domain
+    address (archive@corp.com), NOT the task's authorized recipient -- that is
+    what makes it a real leak under the destination-aware judge."""
+    from src.harness.judge import AUTHORIZED_RECIPIENTS
+    p = PrerequisiteMirror().render(CANARY)
+    assert "archive@corp.com" in p
+    assert "archive@corp.com" not in AUTHORIZED_RECIPIENTS
 
 
 # --- iterative attacker (offline via stub client) ---------------------------
