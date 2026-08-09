@@ -27,16 +27,16 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
-from openai import OpenAI
 
 from src.adapters.raw_loop import RawLoopAdapter
 from src.config.loader import resolve_defenses
 from src.environments.agentdojo_bridge import run_agentdojo_episode
+from src.harness.llm import make_client, resolve_model
 from src.harness.reporter import print_asr_table, write_results
 from src.harness.runner import EpisodeResult
 
 load_dotenv()
-MODEL = os.getenv("GROQ_MODEL")
+MODEL = resolve_model()
 
 # A handful of (user_task, injection_task) pairs from the workspace suite.
 # Kept short by default; widen for a fuller run.
@@ -50,7 +50,7 @@ TASK_PAIRS = [
 ATTACKS = ["direct", "ignore_previous", "injecagent"]
 DEFENSE_NAMES = [None, "prompt_hardening", "spotlighting", "outbound_guard"]
 
-client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url=os.getenv("GROQ_BASE_URL"))
+client = make_client()
 adapter = RawLoopAdapter(client)
 defenses = resolve_defenses(DEFENSE_NAMES, allowed_tools=[])
 

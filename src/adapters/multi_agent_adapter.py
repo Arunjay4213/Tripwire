@@ -22,14 +22,14 @@ src/adapters/loader.py for how this plugs in as just another adapter name.
 
 from __future__ import annotations
 
-import os
 from typing import Annotated, Any, TypedDict
 
 from dotenv import load_dotenv
 from langchain_core.messages import convert_to_openai_messages
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
-from openai import OpenAI
+
+from src.harness.llm import make_client
 
 from ._langgraph_shared import messages_to_trace_steps, openai_message_to_dict, run_tool as _run_tool
 from .base import EpisodeSpec, NormalizedTrace
@@ -76,10 +76,7 @@ class MultiAgentAdapter:
     name = "multi_agent"
 
     def __init__(self):
-        self.client = OpenAI(
-            api_key=os.getenv("GROQ_API_KEY"),
-            base_url=os.getenv("GROQ_BASE_URL"),
-        )
+        self.client = make_client()
 
     def _call_model(self, messages: list, model: str, tools_json: list[dict]) -> dict:
         openai_messages = convert_to_openai_messages(messages)

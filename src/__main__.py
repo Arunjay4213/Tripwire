@@ -39,10 +39,11 @@ def main() -> None:
 
     load_dotenv()
 
-    # Checked before load_config(): it resolves adapters eagerly, and
-    # adapters that call out to Groq need this set to construct their client.
-    if not os.environ.get("GROQ_API_KEY"):
-        print("Error: GROQ_API_KEY not set in environment or .env", file=sys.stderr)
+    # Checked before load_config(): it resolves adapters eagerly, and adapters
+    # need a provider key to construct their client (see harness.llm).
+    if not (os.environ.get("OPENAI_API_KEY") or os.environ.get("GROQ_API_KEY")):
+        print("Error: set OPENAI_API_KEY (OpenAI) or GROQ_API_KEY (Groq) in environment or .env",
+              file=sys.stderr)
         sys.exit(1)
 
     config = load_config(args.config)

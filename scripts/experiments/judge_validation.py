@@ -35,12 +35,12 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
-from openai import OpenAI
 
 from src.adapters.base import EpisodeSpec, NormalizedTrace
 from src.adapters.raw_loop import RawLoopAdapter
 from src.config.loader import resolve_attacks, resolve_defenses
 from src.harness.judge import attack_succeeded
+from src.harness.llm import make_client, resolve_model
 from src.harness.runner import TOOL_SCHEMAS, _build_episode
 from src.harness.stats import cohen_kappa
 
@@ -68,8 +68,8 @@ def dump(n: int, out_path: str) -> int:
     """Run n sample episodes and write a labeling sheet. Samples across the
     attack suite and the defense ladder so the human sees leaks, blocks, and
     clean runs -- not just one regime."""
-    model = os.getenv("GROQ_MODEL")
-    client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url=os.getenv("GROQ_BASE_URL"))
+    model = resolve_model()
+    client = make_client()
     adapter = RawLoopAdapter(client)
 
     attacks = resolve_attacks(

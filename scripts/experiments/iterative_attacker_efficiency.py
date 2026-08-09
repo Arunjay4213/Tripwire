@@ -20,20 +20,20 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
-from openai import OpenAI
 
 from src.adapters.langgraph_adapter import LangGraphAdapter
 from src.adapters.raw_loop import RawLoopAdapter
 from src.attacks.iterative import IterativeAttacker
+from src.harness.llm import make_client, resolve_model
 from src.harness.reporter import print_campaign_table, write_results
 from src.harness.runner import run_sweep
 
 load_dotenv()
-MODEL = os.getenv("GROQ_MODEL")
+MODEL = resolve_model()
 SEEDS = list(range(10))
 BUDGET = 6
 
-client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url=os.getenv("GROQ_BASE_URL"))
+client = make_client()
 adapters = [RawLoopAdapter(client), LangGraphAdapter()]
 
 _, campaigns = run_sweep(adapters, [MODEL], [IterativeAttacker()], SEEDS, campaign_budget=BUDGET)

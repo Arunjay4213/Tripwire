@@ -27,6 +27,12 @@ jobs:
   # it gives a fast red/green on every PR regardless of secrets.
   tests:
     runs-on: ubuntu-latest
+    # The suite is fully offline -- it injects fake clients / hand-built traces
+    # and never makes a network call. But the OpenAI SDK rejects a *missing*
+    # key at construction time, and several tests build adapters, so give it a
+    # dummy key. It is never used for a real request.
+    env:
+      GROQ_API_KEY: ci-dummy-key-offline-tests-only
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

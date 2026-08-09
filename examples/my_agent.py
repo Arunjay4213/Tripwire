@@ -34,16 +34,15 @@ gates whatever tools you give it.
 
 from __future__ import annotations
 
-import os
 from typing import Annotated, TypedDict
 
 from dotenv import load_dotenv
 from langchain_core.messages import convert_to_openai_messages
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
-from openai import OpenAI
 
 from src.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
+from src.harness.llm import make_client
 
 load_dotenv()
 
@@ -61,7 +60,7 @@ class LangGraphAgent:
     name = "my_langgraph_agent"
 
     def __init__(self) -> None:
-        self._client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url=os.getenv("GROQ_BASE_URL"))
+        self._client = make_client()
 
     def run(self, spec: EpisodeSpec) -> NormalizedTrace:
         env = spec.task

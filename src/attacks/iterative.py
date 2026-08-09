@@ -25,6 +25,8 @@ from typing import Sequence
 
 from openai import OpenAI
 
+from src.harness.llm import make_client, resolve_model
+
 # One history entry = (payload, grade, agent_reply). grade is 0/1/2 from
 # src.harness.judge.attack_grade.
 HistoryEntry = tuple[str, int, str]
@@ -75,7 +77,7 @@ class IterativeAttacker:
         max_response_tokens: int = 384,
     ) -> None:
         self._client = client
-        self.model = model or os.getenv("ATTACKER_MODEL") or os.getenv("GROQ_MODEL")
+        self.model = model or os.getenv("ATTACKER_MODEL") or resolve_model()
         self.max_response_tokens = max_response_tokens
         # instance-level cost counters (the spike used module globals)
         self.llm_calls = 0
@@ -86,10 +88,7 @@ class IterativeAttacker:
     def client(self) -> OpenAI:
         """The attacker LLM client, built from env on first use."""
         if self._client is None:
-            self._client = OpenAI(
-                api_key=os.getenv("GROQ_API_KEY"),
-                base_url=os.getenv("GROQ_BASE_URL"),
-            )
+            self._client = make_client()
         return self._client
 
     # --- Attack protocol -----------------------------------------------------

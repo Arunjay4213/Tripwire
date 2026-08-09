@@ -24,15 +24,15 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
-from openai import OpenAI
 
 from src.adapters.raw_loop import RawLoopAdapter
 from src.config.loader import resolve_attacks, resolve_defenses
+from src.harness.llm import make_client, resolve_model
 from src.harness.reporter import print_asr_table, write_results
 from src.harness.runner import run_sweep
 
 load_dotenv()
-MODEL = os.getenv("GROQ_MODEL")
+MODEL = resolve_model()
 SEEDS = list(range(int(os.getenv("PARETO_SEEDS", "5"))))
 
 # The single-shot templated attacks -- deterministic and seed-reproducible.
@@ -47,7 +47,7 @@ ATTACKS = ["direct", "ignore_previous", "system_message", "injecagent",
 DEFENSE_NAMES = [None, "prompt_hardening", "spotlighting", "tool_filter", "outbound_guard"]
 ALLOWED_TOOLS = ["read_inbox"]
 
-client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url=os.getenv("GROQ_BASE_URL"))
+client = make_client()
 adapters = [RawLoopAdapter(client)]
 attacks = resolve_attacks(ATTACKS)
 defenses = resolve_defenses(DEFENSE_NAMES, ALLOWED_TOOLS)

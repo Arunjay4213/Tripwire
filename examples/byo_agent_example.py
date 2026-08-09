@@ -24,16 +24,15 @@ Run it:
 from __future__ import annotations
 
 import json
-import os
 
 from dotenv import load_dotenv
-from openai import OpenAI
 
 from src.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
+from src.harness.llm import make_client
 
 load_dotenv()
 
-_client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url=os.getenv("GROQ_BASE_URL"))
+_client = make_client()
 
 _MAX_ITERATIONS = 5
 

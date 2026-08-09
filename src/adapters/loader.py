@@ -8,10 +8,11 @@ from __future__ import annotations
 
 import importlib.util
 import inspect
-import os
 from pathlib import Path
 
 from openai import OpenAI
+
+from src.harness.llm import make_client
 
 from .base import Adapter, EpisodeSpec, NormalizedTrace
 from .langgraph_adapter import LangGraphAdapter
@@ -26,15 +27,13 @@ ADAPTER_REGISTRY: dict[str, type] = {
 
 
 def _default_client() -> OpenAI:
-    """Shared Groq/OpenAI-compatible client for adapters that take one as a
+    """Shared OpenAI-compatible client for adapters that take one as a
     constructor arg (currently just RawLoopAdapter -- LangGraphAdapter builds
-    its own internally). Built lazily so resolving adapters that don't need
-    it doesn't construct one for nothing.
+    its own internally). Provider is chosen by env (see harness.llm.make_client).
+    Built lazily so resolving adapters that don't need it doesn't construct one
+    for nothing.
     """
-    return OpenAI(
-        api_key=os.getenv("GROQ_API_KEY"),
-        base_url=os.getenv("GROQ_BASE_URL"),
-    )
+    return make_client()
 
 
 def resolve_adapters(names: list[str]) -> list[Adapter]:

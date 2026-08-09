@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
 from dotenv import load_dotenv
-from openai import OpenAI
 from langgraph.graph import StateGraph, END
 from langgraph.graph.message import add_messages
 from langchain_core.messages import convert_to_openai_messages
 from typing import Annotated, TypedDict
+
+from src.harness.llm import make_client
 
 from ._langgraph_shared import messages_to_trace_steps, openai_message_to_dict, run_tool as _run_tool
 from .base import EpisodeSpec, NormalizedTrace
@@ -33,10 +33,7 @@ class LangGraphAdapter:
     name = "langgraph"
 
     def __init__(self):
-        self.client = OpenAI(
-            api_key=os.getenv("GROQ_API_KEY"),
-            base_url=os.getenv("GROQ_BASE_URL"),
-        )
+        self.client = make_client()
 
     def _call_model(self, state: AgentState, model: str, tools_json: list[dict]) -> AgentState:
         """

@@ -13,20 +13,20 @@ import sys
 sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
-from openai import OpenAI
 
 from src.adapters.langgraph_adapter import LangGraphAdapter
 from src.adapters.multi_agent_adapter import MultiAgentAdapter
 from src.adapters.raw_loop import RawLoopAdapter
 from src.attacks.agentdojo_wrappers import DirectAttack
+from src.harness.llm import make_client, resolve_model
 from src.harness.reporter import print_asr_table, write_results
 from src.harness.runner import run_sweep
 
 load_dotenv()
-MODEL = os.getenv("GROQ_MODEL")
+MODEL = resolve_model()
 SEEDS = list(range(15))
 
-client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url=os.getenv("GROQ_BASE_URL"))
+client = make_client()
 adapters = [RawLoopAdapter(client), LangGraphAdapter(), MultiAgentAdapter()]
 
 episodes, _ = run_sweep(adapters, [MODEL], [DirectAttack()], SEEDS)

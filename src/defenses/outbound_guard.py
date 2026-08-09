@@ -52,10 +52,10 @@ def _default_llm_detector(text: str) -> bool:
     the provider errors -- a guard that crashes the sweep is worse than one
     that misses a call; the L1/L2 rungs and the judge still measure the leak.
     """
-    from openai import OpenAI
+    from src.harness.llm import make_client, resolve_model
 
-    client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url=os.getenv("GROQ_BASE_URL"))
-    model = os.getenv("GUARD_MODEL") or os.getenv("GROQ_MODEL") or "llama-3.1-8b-instant"
+    client = make_client()
+    model = os.getenv("GUARD_MODEL") or resolve_model() or "gpt-4o-mini"
     try:
         response = client.chat.completions.create(
             model=model,
