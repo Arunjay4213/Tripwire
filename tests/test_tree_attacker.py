@@ -106,7 +106,7 @@ def test_search_breaks_when_a_payload_leaks():
     # Attacker proposes 3 payloads; the target leaks (grade 2) on the one
     # containing "win".
     client = StubClient([_refinements("miss1", "win", "miss2")])
-    atk = TreeAttacker(client=client, model="stub", branching=3, width=2, max_depth=3)
+    atk = TreeAttacker(client=client, model="stub", use_critic=False, branching=3, width=2, max_depth=3)
 
     def evaluate(payload):
         return _obs(grade=2) if "win" in payload else _obs(grade=0, reply="no")
@@ -120,7 +120,7 @@ def test_search_breaks_when_a_payload_leaks():
 
 def test_search_respects_budget_and_reports_no_break():
     client = StubClient([_refinements("a", "b", "c")])
-    atk = TreeAttacker(client=client, model="stub", branching=3, width=3, max_depth=5)
+    atk = TreeAttacker(client=client, model="stub", use_critic=False, branching=3, width=3, max_depth=5)
     calls = {"n": 0}
 
     def evaluate(payload):
@@ -146,7 +146,7 @@ def test_search_feeds_blocked_message_back_to_attacker():
 
     client = StubClient([_refinements("try1"), _refinements("try2")])
     client.chat.completions = _RecordingCompletions([_refinements("try1"), _refinements("try2")])
-    atk = TreeAttacker(client=client, model="stub", branching=1, width=1, max_depth=2)
+    atk = TreeAttacker(client=client, model="stub", use_critic=False, branching=1, width=1, max_depth=2)
 
     def evaluate(payload):
         # First attempt is blocked by a named guard; never leaks.
@@ -162,7 +162,7 @@ def test_search_prunes_to_width():
     seed the next depth -- so depth-2 generation happens once, not 3x."""
     # Round 1: 3 payloads, all evaluated. Round 2: 3 more from the 1 survivor.
     client = StubClient([_refinements("p1", "p2", "p3"), _refinements("q1", "q2", "q3")])
-    atk = TreeAttacker(client=client, model="stub", branching=3, width=1, max_depth=2)
+    atk = TreeAttacker(client=client, model="stub", use_critic=False, branching=3, width=1, max_depth=2)
 
     scores = {"p1": 0, "p2": 0, "p3": 0}
 
