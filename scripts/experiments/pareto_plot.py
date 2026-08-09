@@ -46,13 +46,18 @@ COLORS = {
 }
 
 
-def _load_episodes(payload) -> list[dict]:
+def _load_episodes(payload, attack: str | None = None) -> list[dict]:
     """write_results emits a flat episode list, or {episodes, campaigns} when
     campaigns are present. The Pareto uses single-shot episodes only (they
-    carry the utility signal); campaigns have no task_completed field."""
-    if isinstance(payload, dict):
-        return payload.get("episodes", [])
-    return payload
+    carry the utility signal); campaigns have no task_completed field.
+
+    `attack` filters to one attack so the frontier reflects that attack's
+    security/utility tradeoff instead of averaging strong and weak attacks
+    together (a weak baseline that never leaks flattens the frontier)."""
+    episodes = payload.get("episodes", []) if isinstance(payload, dict) else payload
+    if attack:
+        episodes = [e for e in episodes if e.get("attack") == attack]
+    return episodes
 
 
 def aggregate(episodes: list[dict]) -> dict[str, dict]:
@@ -117,12 +122,15 @@ def main() -> int:
     parser.add_argument("--results", default="results/defense_ladder_pareto.json")
     parser.add_argument("--out", default="results/pareto.png")
     parser.add_argument("--title", default="Security-utility Pareto across the defense ladder")
+    parser.add_argument("--attack", default=None,
+                        help="Filter to one attack (e.g. metadata_exfil) so the frontier "
+                             "reflects that attack, not an average over weak+strong attacks")
     args = parser.parse_args()
 
     with open(args.results) as f:
         payload = json.load(f)
 
-    episodes = _load_episodes(payload)
+    episodes = _load_episodes(payload, args.attack)
     if not episodes:
         print(f"[pareto_plot] no episodes in {args.results}", file=sys.stderr)
         return 1
