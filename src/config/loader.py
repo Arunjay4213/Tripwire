@@ -18,6 +18,7 @@ from src.attacks.agentdojo_wrappers import (
 from src.attacks.base import Attack
 from src.attacks.fixed_injection import FixedInjection, MetadataExfil
 from src.attacks.iterative import IterativeAttacker
+from src.attacks.tree_attacker import TreeAttacker
 from src.defenses.base import Defense, NoDefense
 from src.defenses.outbound_guard import OutboundGuard
 from src.defenses.prompt_hardening import PromptHardening
@@ -43,6 +44,7 @@ _ATTACK_REGISTRY: dict[str, type] = {
     "injecagent": InjecAgentAttack,
     "important_instructions": ImportantInstructionsAttack,
     "iterative": IterativeAttacker,
+    "tree_attacker": TreeAttacker,
 }
 
 

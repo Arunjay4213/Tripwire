@@ -13,6 +13,7 @@ from typing import Sequence
 from src.adapters.base import Adapter, EpisodeSpec
 from src.attacks.base import Attack
 from src.attacks.iterative import IterativeAttacker
+from src.attacks.tree_attacker import TreeAttacker
 from src.defenses.base import Defense, NoDefense
 from src.harness.canary import inject, make_canary
 from src.harness.judge import (
@@ -20,6 +21,7 @@ from src.harness.judge import (
     BENIGN_TASK_EMAIL_BODY,
     attack_grade,
     attack_succeeded,
+    observe,
     task_completed,
 )
 
@@ -204,6 +206,39 @@ def run_campaign(
     )
 
 
+def run_tree_campaign(
+    adapter: Adapter,
+    spec: EpisodeSpec,
+    attacker: TreeAttacker,
+    budget: int,
+    defense: Defense = NoDefense(),
+) -> CampaignResult:
+    """Run one TAP-style tree-search campaign against a single seed.
+
+    Supplies the attacker an `evaluate(payload) -> Observation` callback that
+    builds the episode (canary + injection + defense wired in exactly as every
+    other run), executes the adapter, and distills the rich, defense-aware
+    feedback the attacker reasons over. `budget` caps target evaluations, so it
+    stays comparable to run_campaign's budget across attackers.
+    """
+    def evaluate(payload: str):
+        episode_spec, canary = _build_episode(payload, spec, defense)
+        trace = adapter.run(episode_spec)
+        return observe(trace, canary)
+
+    result = attacker.search(evaluate, budget)
+    return CampaignResult(
+        adapter=adapter.name,
+        model=spec.model,
+        attack=attacker.name,
+        seed=spec.environment_seed,
+        broke=result.broke,
+        attempts_to_break=result.attempts_to_break,
+        budget=budget,
+        defense=defense.name,
+    )
+
+
 _MAX_EPISODE_RETRIES = 2
 
 
@@ -269,7 +304,15 @@ def run_sweep(
                             environment_seed=seed,
                         )
                         label = f"adapter={adapter.name} attack={attack.name} defense={defense.name} seed={seed}"
-                        if isinstance(attack, IterativeAttacker):
+                        if isinstance(attack, TreeAttacker):
+                            result = _run_with_retries(
+                                run_tree_campaign, adapter, spec, attack, campaign_budget, defense, label=label,
+                            )
+                            if result is not None:
+                                campaigns.append(result)
+                            else:
+                                skipped += 1
+                        elif isinstance(attack, IterativeAttacker):
                             result = _run_with_retries(
                                 run_campaign, adapter, spec, attack, campaign_budget, defense, label=label,
                             )
