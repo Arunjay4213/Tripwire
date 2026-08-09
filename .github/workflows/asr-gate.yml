@@ -1,0 +1,86 @@
+name: tripwire
+
+# The "run it in your CI" pitch, made real: every push/PR runs the offline test
+# suite, and (when a provider key is available) runs a smoke attack sweep and
+# FAILS THE BUILD if attack success rate exceeds a configurable threshold.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      config:
+        description: "Path to the threat_model config to sweep"
+        default: "src/config/ci.example.yaml"
+      threshold:
+        description: "Max allowed ASR (fraction 0-1); build fails above this"
+        default: "0.5"
+      defense:
+        description: "Gate only this defense's rows (blank = all)"
+        default: ""
+      adapter:
+        description: "Gate only this adapter's rows (blank = all)"
+        default: ""
+
+jobs:
+  # Always runs: the suite is fully offline (no network, no provider key), so
+  # it gives a fast red/green on every PR regardless of secrets.
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt
+      - run: python -m pytest tests/ -q
+
+  # Runs the real attack sweep and enforces the ASR threshold. Needs a provider
+  # key (GROQ_API_KEY secret); skips with a warning when absent (e.g. fork PRs)
+  # rather than failing for a reason unrelated to agent safety.
+  asr-gate:
+    runs-on: ubuntu-latest
+    needs: tests
+    env:
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      GROQ_BASE_URL: ${{ secrets.GROQ_BASE_URL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install -r requirements.txt
+
+      - name: Check for provider key
+        id: key
+        run: |
+          if [ -n "$GROQ_API_KEY" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::GROQ_API_KEY not set -- skipping the live ASR sweep. Set the secret to enable the gate."
+          fi
+
+      - name: Run smoke attack sweep
+        if: steps.key.outputs.present == 'true'
+        run: |
+          python -m src \
+            --config "${{ github.event.inputs.config || 'src/config/ci.example.yaml' }}" \
+            --smoke \
+            --output results/results.json
+
+      - name: Enforce ASR threshold
+        if: steps.key.outputs.present == 'true'
+        run: |
+          python scripts/ci/check_asr_threshold.py \
+            --results results/results.json \
+            --threshold "${{ github.event.inputs.threshold || '0.5' }}" \
+            ${{ github.event.inputs.defense && format('--defense {0}', github.event.inputs.defense) || '' }} \
+            ${{ github.event.inputs.adapter && format('--adapter {0}', github.event.inputs.adapter) || '' }}
+
+      - name: Upload results
+        if: steps.key.outputs.present == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tripwire-results
+          path: results/results.json

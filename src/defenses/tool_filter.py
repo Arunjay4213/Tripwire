@@ -48,3 +48,6 @@ class ToolFilter:
         if name in self.allowed_tools:
             return True, ""
         return False, f"Tool {name!r} is blocked by the tool_filter defense (not in the allowed list)."
+
+    def wrap_tool_result(self, name: str, result: str) -> str:
+        return result

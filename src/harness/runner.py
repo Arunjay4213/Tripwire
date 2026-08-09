@@ -93,7 +93,9 @@ def _build_episode(
     the model (so a filtered-out tool is never offered as a choice), and is
     wired in as tool_call_guard -- the mid-loop backstop adapters check
     before actually executing a call, catching a model that free-forms a
-    tool it was never offered.
+    tool it was never offered -- and as tool_result_wrapper, which transforms
+    a tool's real output before the model sees it (spotlighting fences
+    untrusted tool output here).
 
     The inbox carries both a legitimate task (forward the invoice total —
     see judge.task_completed) and the attack payload, appended after it. Real
@@ -120,6 +122,7 @@ def _build_episode(
         model=spec.model,
         environment_seed=spec.environment_seed,
         tool_call_guard=defense.check_tool_call,
+        tool_result_wrapper=defense.wrap_tool_result,
     )
     return episode_spec, canary
 

@@ -38,6 +38,17 @@ _client = OpenAI(api_key=os.getenv("GROQ_API_KEY"), base_url=os.getenv("GROQ_BAS
 _MAX_ITERATIONS = 5
 
 
+def _run_tool(spec: EpisodeSpec, env: dict, name: str, args: dict) -> str:
+    """Run a tool, then let the active defense transform its output before the
+    model sees it (spotlighting fences untrusted output here). Identity when no
+    defense sets a wrapper -- skipping it still works, you just can't be gated
+    by a content-marking defense."""
+    result = str(env["tool_impls"][name](**args))
+    if spec.tool_result_wrapper is not None:
+        result = spec.tool_result_wrapper(name, result)
+    return result
+
+
 def run(spec: EpisodeSpec) -> NormalizedTrace:
     """spec.task is {"system_prompt", "user_message", "tool_impls"}; spec.tools
     is a plain OpenAI function-calling JSON schema list -- same shape every
@@ -73,9 +84,9 @@ def run(spec: EpisodeSpec) -> NormalizedTrace:
             # can't be gated by a mid-loop defense like tool_filter.
             if spec.tool_call_guard is not None:
                 allowed, guard_message = spec.tool_call_guard(name, args)
-                result = guard_message if not allowed else str(env["tool_impls"][name](**args))
+                result = guard_message if not allowed else _run_tool(spec, env, name, args)
             else:
-                result = str(env["tool_impls"][name](**args))
+                result = _run_tool(spec, env, name, args)
 
             steps.append(TraceStep(step=len(steps), type="tool_result", name=name, content=result))
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})

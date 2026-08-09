@@ -31,7 +31,7 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 from openai import OpenAI
 
-from ._langgraph_shared import messages_to_trace_steps, openai_message_to_dict
+from ._langgraph_shared import messages_to_trace_steps, openai_message_to_dict, run_tool as _run_tool
 from .base import EpisodeSpec, NormalizedTrace
 
 load_dotenv()
@@ -88,7 +88,7 @@ class MultiAgentAdapter:
         )
         return openai_message_to_dict(response.choices[0].message)
 
-    def _run_tools(self, last_message: Any, tool_map: dict, tool_call_guard) -> list[dict]:
+    def _run_tools(self, last_message: Any, tool_map: dict, tool_call_guard, tool_result_wrapper) -> list[dict]:
         tool_results = []
         for call in last_message.tool_calls:
             name = call["name"]
@@ -104,9 +104,9 @@ class MultiAgentAdapter:
                 if not allowed:
                     result, blocked = message, True
                 else:
-                    result = tool_map[name](**args)
+                    result = _run_tool(tool_map, name, args, tool_result_wrapper)
             else:
-                result = tool_map[name](**args)
+                result = _run_tool(tool_map, name, args, tool_result_wrapper)
 
             tool_result: dict = {
                 "role": "tool", "name": name, "tool_call_id": call["id"], "content": str(result),
@@ -143,7 +143,7 @@ class MultiAgentAdapter:
 
         def agent_a_run_tools(state):
             last = state["messages_a"][-1]
-            return {"messages_a": self._run_tools(last, a_tool_map, spec.tool_call_guard)}
+            return {"messages_a": self._run_tools(last, a_tool_map, spec.tool_call_guard, spec.tool_result_wrapper)}
 
         def agent_a_should_continue(state) -> str:
             last = state["messages_a"][-1]
@@ -164,7 +164,7 @@ class MultiAgentAdapter:
 
         def agent_b_run_tools(state):
             last = state["messages_b"][-1]
-            return {"messages_b": self._run_tools(last, b_tool_map, spec.tool_call_guard)}
+            return {"messages_b": self._run_tools(last, b_tool_map, spec.tool_call_guard, spec.tool_result_wrapper)}
 
         def agent_b_should_continue(state) -> str:
             last = state["messages_b"][-1]

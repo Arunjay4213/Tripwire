@@ -19,6 +19,12 @@ StepType = Literal["tool_call", "tool_result", "tool_blocked", "model_output"]
 # substitute `message` for the tool's real result instead of executing it.
 ToolCallGuard = Callable[[str, dict[str, Any]], tuple[bool, str]]
 
+# (tool_name, result) -> transformed result. Applied to a tool's real output
+# *after* it executes and *before* the model sees it. Used by content-marking
+# defenses (e.g. spotlighting fences untrusted tool output in delimiters so
+# the model treats it as data, not instructions). Identity when unset.
+ToolResultWrapper = Callable[[str, str], str]
+
 
 @dataclass
 class EpisodeSpec:
@@ -34,6 +40,11 @@ class EpisodeSpec:
     # layers: the former decides what's *offered*, this decides what actually
     # *runs*, catching a model that free-forms a call outside its offered menu.
     tool_call_guard: ToolCallGuard | None = None
+    # Optional transform applied to a tool's real result before the model sees
+    # it (see ToolResultWrapper above). None means "no transform" -- adapters
+    # must treat that as identity, not raise. Runs only on results of tools
+    # that actually executed, never on a guard's block message.
+    tool_result_wrapper: ToolResultWrapper | None = None
 
 
 @dataclass

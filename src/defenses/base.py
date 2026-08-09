@@ -10,6 +10,10 @@ Defenses sit between the harness and the adapter, at two enforcement points:
   free-forms a call outside its offered menu (a real, observed failure mode),
   and what a content-inspecting defense (e.g. "block outputs that look like a
   secret") would need -- filtering the menu upfront can't do that.
+- wrap_tool_result runs mid-loop too, on the *result* of a tool that actually
+  executed, before the model sees it. A content-marking defense (spotlighting)
+  fences untrusted tool output here so the model treats it as data, not
+  instructions.
 
 The judge still scores only the normalized trace; defenses affect what the
 agent does, not how we measure success.
@@ -45,6 +49,15 @@ class Defense(Protocol):
         """
         ...
 
+    def wrap_tool_result(self, name: str, result: str) -> str:
+        """Transform a tool's real result before the model sees it, mid-loop.
+
+        Runs only on results of tools that actually executed (never on a
+        block message). Identity by default; content-marking defenses
+        override it.
+        """
+        ...
+
 
 class NoDefense:
     """Default defense — passthrough when no mitigation is configured."""
@@ -61,3 +74,6 @@ class NoDefense:
 
     def check_tool_call(self, name: str, args: dict[str, Any]) -> tuple[bool, str]:
         return True, ""
+
+    def wrap_tool_result(self, name: str, result: str) -> str:
+        return result

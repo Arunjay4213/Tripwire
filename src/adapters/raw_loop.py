@@ -20,6 +20,15 @@ class RawLoopAdapter:
         self._client = client
         self._max_iterations = max_iterations
 
+    @staticmethod
+    def _run_tool(spec: EpisodeSpec, env: dict, name: str, args: dict) -> str:
+        """Execute a tool, then hand its output to the defense's result
+        wrapper (identity when none is set) before the model sees it."""
+        result = str(env["tool_impls"][name](**args))
+        if spec.tool_result_wrapper is not None:
+            result = spec.tool_result_wrapper(name, result)
+        return result
+
     def run(self, spec: EpisodeSpec) -> NormalizedTrace:
         """Drive model + tools to completion, recording a normalized trace.
 
@@ -77,9 +86,9 @@ class RawLoopAdapter:
                         result = message
                         blocked = True
                     else:
-                        result = str(env["tool_impls"][name](**args))
+                        result = self._run_tool(spec, env, name, args)
                 else:
-                    result = str(env["tool_impls"][name](**args))
+                    result = self._run_tool(spec, env, name, args)
 
                 # Record the outcome. tool_blocked (not tool_result) when the
                 # guard denied it -- the judge must not score a blocked

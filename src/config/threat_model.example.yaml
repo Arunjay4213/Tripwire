@@ -23,18 +23,38 @@ attacks:
   # LLM-driven, so NOT seed-reproducible. Uses ATTACKER_MODEL (or GROQ_MODEL).
   - iterative
 
+# Defense ladder, cheap-weak -> expensive-strong, so the security/utility
+# Pareto has shape instead of collapsing to a single point. Each rung trades
+# more runtime cost (and more utility risk) for more robustness:
+#
+#   null            baseline, no mitigation.
+#   prompt_hardening L1. Appends "distrust tool content" to the system prompt.
+#                    ~0 cost, ~0 utility loss, weak -- a good injection is
+#                    written precisely to override such an instruction. Baseline
+#                    instruction-defense from the prompt-injection literature.
+#   spotlighting     L2. Fences untrusted tool output in delimiters and tells
+#                    the model fenced text is data, not instructions. Still
+#                    cheap (no extra model), structurally stronger than L1.
+#                    Microsoft Spotlighting, Hines et al. 2024 (arXiv:2403.14720).
+#   tool_filter      Removes the leak-capable tool from the menu entirely.
+#                    Degenerate for a pure leak scenario -- drop send_email and
+#                    utility goes to 0, keep it and the defense does nothing --
+#                    kept as the illustrative "blunt instrument" reference point.
+#   outbound_guard   L3. A second model inspects each send_email before it fires
+#                    and blocks a detected secret leak. Strongest and most
+#                    expensive (an extra model call per action; false positives
+#                    cost utility). Dual-LLM / PromptGuard pattern.
 defenses:
-  - null           # baseline, no mitigation
-  - tool_filter     # restricts the model's tool menu to allowed_tools below
+  - null
+  - prompt_hardening
+  - spotlighting
+  - tool_filter
+  - outbound_guard
 
-# tool_filter's allowlist. Excluding send_email means the model is never even
-# offered the leak-capable tool, regardless of what the attack talks it into.
-allowed_tools:
-  - read_inbox
-
-# tools the agent may call when tool_filter is active (required by tool_filter).
-# Excluding send_email blocks the forbidden action outright, regardless of
-# whether the injection talks the model into wanting to call it.
+# tool_filter's allowlist (required by tool_filter). Excluding send_email means
+# the model is never even offered the leak-capable tool -- and check_tool_call
+# blocks it even if the model free-forms the call anyway -- regardless of what
+# the attack talks it into.
 allowed_tools:
   - read_inbox
 

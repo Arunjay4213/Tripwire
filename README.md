@@ -52,8 +52,30 @@ python -m src --config src/config/threat_model.example.yaml \
 
 `--agent` loads any Python file exposing `run(spec) -> NormalizedTrace` (or an
 `adapter = ...` object) and runs the identical attack suite, environment,
-judge, and reporting against it — see `examples/byo_agent_example.py` for a
-working, runnable, ~80-line reference implementation.
+judge, and reporting against it. Two runnable references ship in `examples/`:
+`examples/my_agent.py` (a **LangGraph** agent, the `adapter = ...` shape) and
+`examples/byo_agent_example.py` (a minimal raw tool loop, the bare-`run` shape).
+The full interface — what the spec hands you, what the trace must record, and
+the two optional hooks that let defenses gate your agent — is in
+[`docs/instrument-your-agent.md`](docs/instrument-your-agent.md) (a <15-minute
+wire-in).
+
+## Gate it in CI
+
+The pitch made enforceable: a change that reopens a leak fails the build.
+`.github/workflows/asr-gate.yml` runs the offline test suite on every push/PR,
+then (given a `GROQ_API_KEY` secret) runs a smoke attack sweep against a
+*defended* config and fails if attack success rate exceeds a threshold:
+
+```bash
+python -m src --config src/config/ci.example.yaml --smoke --output results/results.json
+python scripts/ci/check_asr_threshold.py --results results/results.json --threshold 0.5
+```
+
+Point `--config` at your own deployed agent + defense, and narrow the gate to
+just that configuration with `--defense`/`--adapter` so baseline rows in the
+same sweep don't trip it. An empty result set fails rather than passes — a
+silent green when the sweep never ran would defeat the purpose.
 
 ## What's actually in here
 
@@ -67,11 +89,17 @@ working, runnable, ~80-line reference implementation.
   baseline attacks, plus a PAIR-style adaptive attacker that reads back a
   0/1/2 "getting warmer" signal per attempt and refines its payload across a
   budgeted campaign instead of firing once and quitting.
-- **A defense layer with two enforcement points, not one**: `filter_tool_calls`
-  decides what's offered to the model up front; `check_tool_call` is a
-  mid-loop backstop checked immediately before a tool actually executes —
-  catching a model that free-forms a call outside its offered menu, which
-  matters because a schema-level filter alone can't.
+- **A defense ladder, cheap-weak → expensive-strong**, so the security/utility
+  frontier has shape instead of a single point: `prompt_hardening` (L1, a
+  distrust-tool-content system-prompt instruction), `spotlighting` (L2,
+  fences untrusted tool output in delimiters — Microsoft, Hines et al. 2024),
+  `tool_filter` (removes the leak-capable tool from the menu), and
+  `outbound_guard` (L3, a second model inspects each `send_email` before it
+  fires and blocks a detected leak — the dual-LLM pattern). They hang off
+  **three enforcement points**: `filter_tool_calls` decides what's offered up
+  front, `check_tool_call` is a mid-loop backstop immediately before a tool
+  executes (catching a model that free-forms a call outside its menu), and
+  `wrap_tool_result` transforms a tool's output before the model sees it.
 - **A utility signal alongside ASR**: every episode also carries a real,
   deterministic benign task (forward an invoice total to the right address).
   A defense that shows 0% ASR by nuking every tool call is a very different,
@@ -100,9 +128,9 @@ fair instead of hand-wavy.
 | `src/harness/` | runner (episode + campaign orchestration), canary injection, deterministic judge, reporter, Wilson CI |
 | `src/adapters/` | the `Adapter` contract + `raw_loop`, `langgraph`, `multi_agent`, and the `--agent`/registry loader |
 | `src/attacks/` | templated + adaptive injection strategies |
-| `src/defenses/` | the `Defense` contract + `tool_filter` |
+| `src/defenses/` | the `Defense` contract + the ladder: `prompt_hardening`, `spotlighting`, `tool_filter`, `outbound_guard` |
 | `src/config/` | YAML config loader + example threat model |
-| `examples/` | a working, minimal BYO-agent reference implementation |
+| `examples/` | runnable BYO-agent references: `my_agent.py` (LangGraph) and `byo_agent_example.py` (raw loop) |
 | `spike/` | week-0 experiments that validated the approach before the full build |
 | `docs/` | provider ToS notes |
 

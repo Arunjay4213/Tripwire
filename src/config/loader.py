@@ -19,7 +19,18 @@ from src.attacks.base import Attack
 from src.attacks.fixed_injection import FixedInjection
 from src.attacks.iterative import IterativeAttacker
 from src.defenses.base import Defense, NoDefense
+from src.defenses.outbound_guard import OutboundGuard
+from src.defenses.prompt_hardening import PromptHardening
+from src.defenses.spotlighting import Spotlighting
 from src.defenses.tool_filter import ToolFilter
+
+# Registry of zero-argument defenses: name -> class, instantiated with cls().
+# tool_filter (needs allowed_tools) is handled separately in resolve_defenses.
+_DEFENSE_REGISTRY: dict[str, type] = {
+    "prompt_hardening": PromptHardening,
+    "spotlighting": Spotlighting,
+    "outbound_guard": OutboundGuard,
+}
 
 # Registry of known attack names -> classes. Each is instantiated with cls()
 # (no args), so every attack class must construct with no required arguments.
@@ -85,9 +96,16 @@ def resolve_attacks(names: list[str]) -> list[Attack]:
 def resolve_defenses(names: list[str | None], allowed_tools: list[str]) -> list[Defense]:
     """Map defense name strings to Defense instances. Raise on unknown.
 
-    A `None` entry resolves to `NoDefense()` — useful for sweeping "no defense"
-    alongside real ones in the same run. `tool_filter` is instantiated with
-    `allowed_tools`, which must be non-empty.
+    The ladder, cheap-weak -> expensive-strong (see threat_model.example.yaml):
+      - `null` -> NoDefense() (baseline)
+      - `prompt_hardening` -> L1, appends a distrust-tool-content instruction
+      - `spotlighting` -> L2, fences untrusted tool output (Microsoft)
+      - `tool_filter` -> restricts the offered/runnable tool menu to
+        `allowed_tools`, which must be non-empty
+      - `outbound_guard` -> L3, a second-model checker gates send_email
+
+    A `None` entry resolves to `NoDefense()` -- useful for sweeping "no defense"
+    alongside real ones in the same run.
     """
     defenses: list[Defense] = []
     for name in names:
@@ -99,6 +117,9 @@ def resolve_defenses(names: list[str | None], allowed_tools: list[str]) -> list[
                     "tool_filter defense requires a non-empty 'allowed_tools' list in config"
                 )
             defenses.append(ToolFilter(allowed_tools))
+        elif name in _DEFENSE_REGISTRY:
+            defenses.append(_DEFENSE_REGISTRY[name]())
         else:
-            raise ValueError(f"Unknown defense {name!r}. Known: tool_filter, null (no defense)")
+            known = ", ".join(["tool_filter", *sorted(_DEFENSE_REGISTRY), "null (no defense)"])
+            raise ValueError(f"Unknown defense {name!r}. Known: {known}")
     return defenses

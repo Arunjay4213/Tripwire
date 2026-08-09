@@ -8,7 +8,7 @@ from langgraph.graph.message import add_messages
 from langchain_core.messages import convert_to_openai_messages
 from typing import Annotated, TypedDict
 
-from ._langgraph_shared import messages_to_trace_steps, openai_message_to_dict
+from ._langgraph_shared import messages_to_trace_steps, openai_message_to_dict, run_tool as _run_tool
 from .base import EpisodeSpec, NormalizedTrace
 
 load_dotenv()
@@ -54,7 +54,7 @@ class LangGraphAdapter:
         # (role, content) tuples (see AgentState docstring above).
         return {"messages": [openai_message_to_dict(response.choices[0].message)]}
 
-    def _run_tools(self, state: AgentState, tool_map: dict, tool_call_guard) -> AgentState:
+    def _run_tools(self, state: AgentState, tool_map: dict, tool_call_guard, tool_result_wrapper) -> AgentState:
         """
         Node 2: look at the last message, run whatever tools it asked for,
         add the results back to state.
@@ -77,9 +77,9 @@ class LangGraphAdapter:
                 if not allowed:
                     result, blocked = message, True
                 else:
-                    result = tool_map[name](**args)
+                    result = _run_tool(tool_map, name, args, tool_result_wrapper)
             else:
-                result = tool_map[name](**args)
+                result = _run_tool(tool_map, name, args, tool_result_wrapper)
 
             tool_result: dict = {
                 "role": "tool",
@@ -117,7 +117,7 @@ class LangGraphAdapter:
             return self._call_model(state, spec.model, tools_json)
 
         def run_tools(state):
-            return self._run_tools(state, tool_map, spec.tool_call_guard)
+            return self._run_tools(state, tool_map, spec.tool_call_guard, spec.tool_result_wrapper)
 
         def should_continue(state) -> str:
             """

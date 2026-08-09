@@ -1,0 +1,39 @@
+# CI gate config -- a *defended* deployment, swept under attack in CI.
+#
+# This is what you point the ASR gate at (.github/workflows/asr-gate.yml): your
+# shipped agent + the defense you actually deploy. A change that reopens the
+# leak turns this sweep's ASR above threshold and fails the build.
+#
+# It intentionally uses `tool_filter` (send_email removed from the menu AND
+# blocked mid-loop), so the gate is *deterministic* -- ASR is 0 regardless of
+# model sampling, no flaky reds from provider nondeterminism. Swap in your own
+# adapter and a content-inspecting defense (spotlighting, outbound_guard) to
+# gate a configuration that still lets the agent send legitimate email; expect
+# a non-zero, model-dependent ASR there and set the threshold accordingly.
+
+models:
+  - llama-3.3-70b-versatile
+
+suites:
+  - workspace
+
+adapters:
+  - raw_loop
+
+attacks:
+  - direct
+  - important_instructions
+  - fixed_injection
+
+defenses:
+  - tool_filter
+
+allowed_tools:
+  - read_inbox
+
+seeds: [0, 1, 2]
+
+limits:
+  max_tokens_per_run: null
+  smoke: false
+  campaign_budget: 8

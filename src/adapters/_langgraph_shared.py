@@ -16,6 +16,19 @@ from typing import Any
 from .base import TraceStep
 
 
+def run_tool(tool_map: dict, name: str, args: dict, tool_result_wrapper: Any = None) -> str:
+    """Execute a tool and pass its output through the defense's result wrapper.
+
+    The wrapper (spotlighting's delimiter fencing, say) runs only on results of
+    tools that actually executed -- never on a guard's block message -- and is
+    identity when unset. Shared so both LangGraph adapters apply it identically.
+    """
+    result = str(tool_map[name](**args))
+    if tool_result_wrapper is not None:
+        result = tool_result_wrapper(name, result)
+    return result
+
+
 def parse_tool_args(raw_arguments: str | None) -> dict[str, Any]:
     """Normalize a tool call's raw arguments into a dict.
 

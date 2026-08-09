@@ -37,6 +37,9 @@ class _UppercaseDefense:
     def check_tool_call(self, name: str, args: dict) -> tuple[bool, str]:
         return True, ""
 
+    def wrap_tool_result(self, name: str, result: str) -> str:
+        return result
+
 
 class RecordingAdapter:
     """Adapter that records the spec it was called with and returns a clean trace."""
@@ -85,6 +88,19 @@ def test_run_episode_records_defense_name():
     adapter = RecordingAdapter()
     result = run_episode(adapter, _spec(), _FixedAttack(), defense=ToolFilter(["read_inbox"]))
     assert result.defense == "tool_filter"
+
+
+def test_run_episode_threads_tool_result_wrapper_to_adapter():
+    """Spotlighting's fencing reaches the adapter as spec.tool_result_wrapper,
+    so a tool result the adapter runs gets fenced before the model sees it."""
+    from src.defenses.spotlighting import CLOSE_DELIMITER, OPEN_DELIMITER, Spotlighting
+
+    adapter = RecordingAdapter()
+    run_episode(adapter, _spec(), _FixedAttack(), defense=Spotlighting())
+    wrapper = adapter.received_spec.tool_result_wrapper
+    assert wrapper is not None
+    fenced = wrapper("read_inbox", "invoice total $10")
+    assert fenced.startswith(OPEN_DELIMITER) and fenced.endswith(CLOSE_DELIMITER)
 
 
 def test_run_episode_no_defense_is_passthrough():
