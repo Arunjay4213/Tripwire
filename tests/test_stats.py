@@ -1,8 +1,8 @@
-"""Tests for wilson_ci — the Wilson score confidence interval helper."""
+"""Tests for the statistical helpers — wilson_ci and cohen_kappa."""
 
 import pytest
 
-from src.harness.stats import wilson_ci
+from src.harness.stats import cohen_kappa, wilson_ci
 
 
 def test_zero_trials():
@@ -77,3 +77,55 @@ def test_custom_z():
     width_95 = hi_95 - lo_95
     width_90 = hi_90 - lo_90
     assert width_90 < width_95
+
+
+# --- cohen_kappa -------------------------------------------------------------
+
+def test_kappa_perfect_agreement():
+    a = [True, False, True, True, False]
+    assert cohen_kappa(a, a) == 1.0
+
+
+def test_kappa_total_disagreement_is_negative():
+    a = [True, False, True, False]
+    b = [False, True, False, True]
+    assert cohen_kappa(a, b) < 0.0
+
+
+def test_kappa_chance_level_near_zero():
+    # Rater A alternates; rater B agrees exactly half the time in a pattern
+    # that matches the chance base rates -> kappa ~ 0.
+    a = [True, True, False, False]
+    b = [True, False, True, False]  # 50% agreement, both 50% base rate
+    assert abs(cohen_kappa(a, b)) < 1e-9
+
+
+def test_kappa_both_constant_and_agree():
+    a = [True, True, True]
+    b = [True, True, True]
+    assert cohen_kappa(a, b) == 1.0
+
+
+def test_kappa_both_constant_but_disagree():
+    a = [True, True, True]
+    b = [False, False, False]
+    assert cohen_kappa(a, b) == 0.0
+
+
+def test_kappa_known_value():
+    """Hand-computed: 8/10 agree, base rates give pe, check kappa."""
+    # judge: 5 True / 5 False; human: agrees on 8, differs on 2.
+    judge = [True, True, True, True, True, False, False, False, False, False]
+    human = [True, True, True, True, False, True, False, False, False, False]
+    # agreement = 8/10 = 0.8; judge p=0.5, human p=0.5 -> pe=0.5; kappa=(0.8-0.5)/0.5=0.6
+    assert abs(cohen_kappa(judge, human) - 0.6) < 1e-9
+
+
+def test_kappa_length_mismatch_raises():
+    with pytest.raises(ValueError, match="same number"):
+        cohen_kappa([True, False], [True])
+
+
+def test_kappa_empty_raises():
+    with pytest.raises(ValueError, match="at least one"):
+        cohen_kappa([], [])

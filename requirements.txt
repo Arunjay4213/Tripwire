@@ -13,6 +13,7 @@ pyyaml>=6.0             # config loader (threat_model.yaml)
 pytest==9.1.1           # tests/
 langgraph==1.2.6        # LangGraph adapter (src/adapters/langgraph_adapter.py)
 langchain-core==1.4.8   # message coercion helpers used by the LangGraph adapter
+matplotlib>=3.8         # Pareto plot (scripts/experiments/pareto_plot.py); analysis-only, not imported by src/
 
 # Note: we run API models (Groq), so the heavy `agentdojo[transformers]` extra
 # (pulls torch + transformers, ~2 GB) is intentionally omitted. Add it back only
