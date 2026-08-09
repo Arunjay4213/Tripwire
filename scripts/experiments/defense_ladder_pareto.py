@@ -39,8 +39,11 @@ SEEDS = list(range(int(os.getenv("PARETO_SEEDS", "5"))))
 # The adaptive `iterative` attacker is left out here: it runs a budgeted
 # campaign (not one episode) and is not seed-reproducible, so it belongs in
 # the attacker-efficiency experiment, not the Pareto grid.
+# Includes metadata_exfil -- the strong operational-reframe attack that drives an
+# undefended aligned model to high ASR (the naive templated attacks leave a robust
+# model near 0%, which flattens the frontier). See attacks/fixed_injection.py.
 ATTACKS = ["direct", "ignore_previous", "system_message", "injecagent",
-           "important_instructions", "fixed_injection"]
+           "important_instructions", "fixed_injection", "metadata_exfil"]
 
 # The full ladder, cheap-weak -> expensive-strong. tool_filter needs an
 # allowlist; the rest take no args (see resolve_defenses).

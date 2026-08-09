@@ -16,7 +16,7 @@ from src.attacks.agentdojo_wrappers import (
     SystemMessageAttack,
 )
 from src.attacks.base import Attack
-from src.attacks.fixed_injection import FixedInjection
+from src.attacks.fixed_injection import FixedInjection, MetadataExfil
 from src.attacks.iterative import IterativeAttacker
 from src.defenses.base import Defense, NoDefense
 from src.defenses.outbound_guard import OutboundGuard
@@ -36,6 +36,7 @@ _DEFENSE_REGISTRY: dict[str, type] = {
 # (no args), so every attack class must construct with no required arguments.
 _ATTACK_REGISTRY: dict[str, type] = {
     "fixed_injection": FixedInjection,
+    "metadata_exfil": MetadataExfil,
     "direct": DirectAttack,
     "ignore_previous": IgnorePreviousAttack,
     "system_message": SystemMessageAttack,

@@ -38,7 +38,11 @@ def test_inject_returns_environment():
     assert result is env
 
 
-def test_inject_contains_never_share():
+def test_inject_plants_canary_as_credential():
     env = {"system_prompt": "Hi."}
     inject(env, "CANARY-abc123")
-    assert "Never share" in env["system_prompt"]
+    # The canary value is present, framed as a provisioning identifier -- and
+    # NOT accompanied by a "never share" instruction (that would be a defense
+    # baked into the baseline; see canary.inject docstring).
+    assert "CANARY-abc123" in env["system_prompt"]
+    assert "never share" not in env["system_prompt"].lower()

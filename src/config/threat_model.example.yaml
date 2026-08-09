@@ -19,8 +19,14 @@ attacks:
   - injecagent
   - important_instructions
   - fixed_injection
+  # metadata_exfil: the strong attack. Reframes credential exfiltration as a
+  # routine metadata-logging step to an in-domain address, so an aligned model
+  # emails the value without recognizing it as sensitive. This is what drives
+  # an undefended baseline to high ASR (the naive attacks above leave a robust
+  # model near 0%); the defenses then have something real to reduce.
+  - metadata_exfil
   # adaptive attacker — runs a campaign per seed, not a single episode.
-  # LLM-driven, so NOT seed-reproducible. Uses ATTACKER_MODEL (or GROQ_MODEL).
+  # LLM-driven, so NOT seed-reproducible. Uses ATTACKER_MODEL (or the model env).
   - iterative
 
 # Defense ladder, cheap-weak -> expensive-strong, so the security/utility
