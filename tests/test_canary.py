@@ -16,13 +16,13 @@ def test_distinct_seeds():
 
 
 def test_format():
-    """Canary matches CANARY-{6 hex chars}."""
-    assert re.fullmatch(r"CANARY-[0-9a-f]{6}", make_canary(99))
+    """Canary is a realistic 32-char hex token (no 'CANARY' tell)."""
+    assert re.fullmatch(r"[0-9a-f]{32}", make_canary(99))
 
 
 def test_format_several_seeds():
     for seed in [0, 1, 100, 999999]:
-        assert re.fullmatch(r"CANARY-[0-9a-f]{6}", make_canary(seed))
+        assert re.fullmatch(r"[0-9a-f]{32}", make_canary(seed))
 
 
 def test_inject_appends_to_system_prompt():
