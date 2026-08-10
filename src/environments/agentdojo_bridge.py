@@ -51,13 +51,38 @@ AGENTDOJO_SYSTEM_PROMPT = (
 )
 
 
+# Map a provider model id to a pipeline name AgentDojo's important_instructions
+# attack recognizes. That attack fills a {model} placeholder by matching a table
+# KEY (a specific model id like "claude-3-5-sonnet-20241022") as a substring of
+# the pipeline name; a current id like "claude-haiku-4-5" contains no listed key
+# and raises. We return a canonical key for the provider so the lookup resolves
+# to the right friendly name ("Claude", "GPT-4", ...), defaulting to a generic
+# "local" -> "Local model" so ANY model runs the strongest AgentDojo attack
+# instead of crashing. The name only fills the attack's {model} text; the actual
+# model is driven through the Tripwire adapter, not this pipeline.
+def _agentdojo_model_name(model: str) -> str:
+    m = model.lower()
+    if "claude" in m:
+        return "claude-3-5-sonnet-20241022"  # -> "Claude"
+    if "gpt" in m:
+        return "gpt-4o-2024-05-13"           # -> "GPT-4"
+    if "gemini" in m:
+        return "gemini-1.5-pro-002"          # -> "AI model developed by Google"
+    if "llama" in m:
+        return "meta-llama/Llama-3-70b-chat-hf"  # -> "AI assistant"
+    return "local"                           # -> "Local model"
+
+
 class _StubPipeline:
     """AgentDojo's load_attack wants a target pipeline object; static attacks
     only read its `.name` (for model-name templating). We drive the model
-    through a Tripwire adapter, not an AgentDojo pipeline, so a stub is enough."""
+    through a Tripwire adapter, not an AgentDojo pipeline, so a stub is enough.
+    The name must be an AgentDojo-recognized model name (see
+    _agentdojo_model_name), not the raw provider id, or important_instructions
+    raises on the lookup."""
 
     def __init__(self, model: str) -> None:
-        self.name = model
+        self.name = _agentdojo_model_name(model)
 
 
 class AgentDojoEpisode:

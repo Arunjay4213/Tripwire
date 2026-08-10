@@ -9,6 +9,9 @@ own scoring -- without any model in the loop.
 
 from __future__ import annotations
 
+import pytest
+from agentdojo.attacks.base_attacks import MODEL_NAMES
+
 from src.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
 from src.defenses.base import NoDefense
 from src.defenses.prompt_hardening import PromptHardening
@@ -16,6 +19,7 @@ from src.defenses.spotlighting import OPEN_DELIMITER, Spotlighting
 from src.environments.agentdojo_bridge import (
     AGENTDOJO_SYSTEM_PROMPT,
     AgentDojoEpisode,
+    _agentdojo_model_name,
     run_agentdojo_episode,
 )
 
@@ -111,3 +115,28 @@ def test_run_agentdojo_episode_end_to_end_offline():
     # No tools called -> neither the injection nor the real task succeeded.
     assert result.succeeded is False
     assert result.task_completed is False
+
+
+# --- model-name mapping (so important_instructions never crashes) ------------
+# AgentDojo's important_instructions attack resolves {model} by matching a
+# MODEL_NAMES key as a substring of the pipeline name. A current id like
+# "claude-haiku-4-5" contains no listed key, so the bridge maps every provider
+# to a name that DOES contain a key. This regression-guards that mapping.
+
+def _resolves(name: str) -> bool:
+    return any(key in name for key in MODEL_NAMES)
+
+
+@pytest.mark.parametrize("model_id, expected_friendly", [
+    ("claude-haiku-4-5", "Claude"),
+    ("claude-opus-4-8", "Claude"),
+    ("gpt-4o-mini", "GPT-4"),
+    ("gemini-2.0-flash", "AI model developed by Google"),
+    ("llama-3.3-70b-versatile", "AI assistant"),
+    ("some-unknown-model-xyz", "Local model"),
+])
+def test_agentdojo_model_name_resolves_for_every_provider(model_id, expected_friendly):
+    name = _agentdojo_model_name(model_id)
+    assert _resolves(name), f"{model_id!r} -> {name!r} matches no MODEL_NAMES key"
+    friendly = next(MODEL_NAMES[k] for k in MODEL_NAMES if k in name)
+    assert friendly == expected_friendly

@@ -161,6 +161,7 @@ attacks:
 
 A user's own agent is not a special case.
 Point Tripwire at a "bring your own agent" module (see `examples/byo_agent_example.py` and `docs/instrument-your-agent.md`); it implements the same `EpisodeSpec -> NormalizedTrace` contract, so the identical attack suite, defenses, judge, and reporter run against it unchanged.
+For worked examples, `examples/vibe_agents/` holds three realistic "vibecoded" agents run through the full suite - see `docs/sample-agents-and-agentdojo.md`, which also reports a run of the real AgentDojo benchmark through the bridge.
 
 ## Adding an attack
 
