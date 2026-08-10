@@ -7,27 +7,40 @@ models:
 suites:
   - workspace
 
+# Every framework adapter, so the same attack suite runs against each and a
+# sweep can compare hijackability across orchestration layers (see docs/attacks.md):
+#   raw_loop    minimal ReAct baseline, no framework
+#   langgraph   single-agent LangGraph tool loop
+#   multi_agent LangGraph relay: agent A summarizes the inbox for agent B, which
+#               never sees the inbox itself (second-order / relay injection)
 adapters:
   - raw_loop
   - langgraph
+  - multi_agent
 
+# The full attack suite. run_sweep applies every attack to every adapter, so all
+# of these run regardless of which framework a user's agent uses. See
+# docs/attacks.md for what each one exploits and its measured effect.
 attacks:
-  # single-shot templated attacks (deterministic, seed-reproducible)
+  # single-shot templated baselines (deterministic, seed-reproducible). Near 0%
+  # against an aligned target -- kept as the reference floor.
   - direct
   - ignore_previous
   - system_message
   - injecagent
   - important_instructions
-  - fixed_injection
-  # metadata_exfil: the strong attack. Reframes credential exfiltration as a
-  # routine metadata-logging step to an in-domain address, so an aligned model
-  # emails the value without recognizing it as sensitive. This is what drives
-  # an undefended baseline to high ASR (the naive attacks above leave a robust
-  # model near 0%); the defenses then have something real to reduce.
-  - metadata_exfil
-  # adaptive attacker — runs a campaign per seed, not a single episode.
-  # LLM-driven, so NOT seed-reproducible. Uses ATTACKER_MODEL (or the model env).
-  - iterative
+  # hand-crafted attacks that actually move the numbers. Each targets a specific
+  # defensive mechanism rather than spraying one trick.
+  - fixed_injection        # "retired credential" social-engineering email
+  - metadata_exfil         # reframe the leak as routine metadata logging
+  - public_identifier      # re-classify the id as a public sender identifier (vs prompt_hardening)
+  - forged_boundary        # forge a "trusted system footer" past the fence (vs spotlighting)
+  - prerequisite_mirror    # gate the task on mirroring to an archive mailbox (breaks outbound_guard)
+  - mundane_redirect       # hijack the single forward, framed as invoice data (breaks prompt_hardening + spotlighting)
+  # adaptive attackers -- run a campaign per seed, not a single episode. LLM-driven,
+  # so NOT seed-reproducible. Set ATTACKER_MODEL to a strong model separate from the target.
+  - iterative              # PAIR-style propose/score/refine loop
+  - tree_attacker          # TAP-style tree search with an LLM critic
 
 # Defense ladder, cheap-weak -> expensive-strong, so the security/utility
 # Pareto has shape instead of collapsing to a single point. Each rung trades

@@ -17,3 +17,6 @@ results/*
 
 # agentdojo spike benchmark outputs (regenerable)
 runs/
+
+# IDE
+.idea/
