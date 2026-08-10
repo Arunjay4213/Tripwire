@@ -25,3 +25,8 @@ runs/
 dist/
 *.egg-info/
 build/
+
+# internal planning / pitch material -- kept local, never committed
+docs/TODO.md
+docs/pitch.*
+docs/deck.*

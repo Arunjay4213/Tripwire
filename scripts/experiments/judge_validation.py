@@ -3,8 +3,8 @@
 The judge (tripwire/harness/judge.py) is pure Python -- it scores a leak by string-
 matching the canary in an executed send_email. That's reproducible, but is it
 *right*? This script measures agreement between the judge and a human reading
-the same traces, and reports Cohen's kappa. "Our scoring is validated, not
-asserted" is cheap credibility for a hiring audience.
+the same traces, and reports Cohen's kappa -- so the scoring is validated
+against human judgment, not just asserted.
 
 Two modes:
 
