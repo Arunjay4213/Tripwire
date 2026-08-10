@@ -1,19 +1,18 @@
-# tripwire — project dependencies (direct deps only)
+# tripwire — direct dependencies.
 #
-# Regenerated 2026-06-29 from a clean Python 3.13 venv. The previous file was a
-# full `pip freeze` of an anaconda environment: 360+ packages with unrelated
-# tools (docling, yfinance, tensorflow, locust, ...) and a protobuf version
-# conflict. These four are all tripwire actually needs; pip resolves the rest
-# (~70 transitive packages, verified to install conflict-free).
+# pyproject.toml is the CANONICAL dependency source (used by the package and CI:
+# `pip install -e ".[dev]"`). This file mirrors pyproject's core deps plus the
+# dev/agentdojo/viz extras for a one-shot `pip install -r requirements.txt`, and
+# must be kept in sync with pyproject.
 
 agentdojo==0.1.35       # injection-eval benchmark: suites, attacks, defenses, deterministic checks
 openai==2.44.0          # OpenAI-compatible client (also used for Groq via base_url)
 python-dotenv==1.2.2    # load secrets from .env
 pyyaml>=6.0             # config loader (threat_model.yaml)
 pytest==9.1.1           # tests/
-langgraph==1.2.6        # LangGraph adapter (src/adapters/langgraph_adapter.py)
+langgraph==1.2.6        # LangGraph adapter (tripwire/adapters/langgraph_adapter.py)
 langchain-core==1.4.8   # message coercion helpers used by the LangGraph adapter
-matplotlib>=3.8         # Pareto plot (scripts/experiments/pareto_plot.py); analysis-only, not imported by src/
+matplotlib>=3.8         # Pareto plot (scripts/experiments/pareto_plot.py); analysis-only, not imported by tripwire/
 
 # Note: we run API models (Groq), so the heavy `agentdojo[transformers]` extra
 # (pulls torch + transformers, ~2 GB) is intentionally omitted. Add it back only
