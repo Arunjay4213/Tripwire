@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
-authors = [{ name = "Arunjay", email = "agrawal54@wisc.edu" }]
+authors = [{ name = "Arunjay", email = "arunjay101@gmail.com" }]
 keywords = [
     "prompt-injection",
     "ai-security",
