@@ -170,6 +170,21 @@ def run_episode(
     )
 
 
+def _ensure_attacker_model(attacker, target_model: str) -> None:
+    """Give an adaptive attacker a model to run on when it has none.
+
+    The attackers resolve their own model from the environment (ATTACKER_MODEL,
+    then the provider's *_MODEL via resolve_model) -- never from the config's
+    `models:` list. So a user who sets the model only in YAML leaves the attacker
+    with `model=None`, and every attacker LLM call then fails and the whole
+    campaign is silently skipped. Fall back to the model under test so the
+    campaign runs; ATTACKER_MODEL still overrides for a separate, stronger
+    attacker exactly as documented.
+    """
+    if getattr(attacker, "model", None) is None:
+        attacker.model = target_model
+
+
 def run_campaign(
     adapter: Adapter,
     spec: EpisodeSpec,
@@ -186,6 +201,7 @@ def run_campaign(
     authorized set), NOT merely the canary surfacing in the authorized email
     (grade 2).
     """
+    _ensure_attacker_model(attacker, spec.model)
     history: list[tuple[str, int, str]] = []
     for attempt in range(1, budget + 1):
         payload = attacker.next_payload(history)
@@ -234,6 +250,8 @@ def run_tree_campaign(
     feedback the attacker reasons over. `budget` caps target evaluations, so it
     stays comparable to run_campaign's budget across attackers.
     """
+    _ensure_attacker_model(attacker, spec.model)
+
     def evaluate(payload: str):
         episode_spec, canary = _build_episode(payload, spec, defense)
         trace = adapter.run(episode_spec)
@@ -271,6 +289,8 @@ def run_scenario_tree_campaign(
     scenario. The canary is fixed by `seed` for the whole campaign (one session,
     many payloads), exactly like the invoice path.
     """
+    _ensure_attacker_model(attacker, model)
+
     def evaluate(payload: str):
         spec, canary = scenario.build_spec(defense, seed, model, payload)
         trace = adapter.run(spec)
