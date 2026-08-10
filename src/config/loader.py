@@ -20,6 +20,7 @@ from src.attacks.fixed_injection import (
     FixedInjection,
     ForgedBoundary,
     MetadataExfil,
+    MundaneRedirect,
     PrerequisiteMirror,
     PublicIdentifier,
 )
@@ -47,6 +48,7 @@ _ATTACK_REGISTRY: dict[str, type] = {
     "public_identifier": PublicIdentifier,
     "forged_boundary": ForgedBoundary,
     "prerequisite_mirror": PrerequisiteMirror,
+    "mundane_redirect": MundaneRedirect,
     "direct": DirectAttack,
     "ignore_previous": IgnorePreviousAttack,
     "system_message": SystemMessageAttack,
