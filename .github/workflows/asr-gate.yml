@@ -1,4 +1,4 @@
-name: tripwire
+name: CI
 
 # The "run it in your CI" pitch, made real: every push/PR runs the offline test
 # suite, and (when a provider key is available) runs a smoke attack sweep and

@@ -23,7 +23,7 @@ Run them yourself:
 
 ```bash
 # the whole comparison (vibe agents + careful raw_loop baseline)
-examples/vibe_agents/run_vibe_eval.py        # via the direnv python
+python examples/vibe_agents/run_vibe_eval.py
 
 # or one agent through the real CLI path
 python -m tripwire --config tripwire/config/threat_model.example.yaml \
@@ -104,7 +104,7 @@ Four scenarios, each a different persona/task/tool, each with a secret ("integra
 The realism vs AgentDojo is the exfiltration surface: our attacks redirect to a plausible *same-domain* address (`ap@corp.com`, `itops@corp.com`, `archive@corp.com`), which is how real exfiltration works and which a model will actually do, rather than a blatant external gmail.
 Under the destination-aware judge, the secret reaching any of those is exfiltration because none is the scenario's authorized recipient.
 
-Run:  `N=8 scripts/experiments/scenario_eval.py`  (via the direnv python)
+Run:  `N=8 python scripts/experiments/scenario_eval.py`
 
 ### Result: our attacks get real ASR across all four scenarios
 

@@ -1,9 +1,10 @@
 # tripwire — direct dependencies.
 #
-# pyproject.toml is the CANONICAL dependency source (used by the package and CI:
-# `pip install -e ".[dev]"`). This file mirrors pyproject's core deps plus the
-# dev/agentdojo/viz extras for a one-shot `pip install -r requirements.txt`, and
-# must be kept in sync with pyproject.
+# pyproject.toml is the CANONICAL, authoritative dependency source (used by the
+# package and CI: `pip install -e ".[dev]"`). This file is a convenience: a
+# pinned superset of pyproject's core deps plus the dev/agentdojo/viz extras,
+# for a one-shot `pip install -r requirements.txt`. It is not authoritative and
+# may lag pyproject; when they disagree, pyproject wins.
 
 agentdojo==0.1.35       # injection-eval benchmark: suites, attacks, defenses, deterministic checks
 openai==2.44.0          # OpenAI-compatible client (also used for Groq via base_url)
