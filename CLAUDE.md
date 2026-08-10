@@ -14,7 +14,7 @@ Tripwire is an evaluation harness that measures AI agent vulnerability to prompt
 # Install for development (editable, with test + optional extras)
 pip install -e ".[dev]"        # or: uv pip install -e ".[dev]"
 
-# Run all tests (293 tests, fully offline, ~4s)
+# Run all tests (295 tests, fully offline, ~4s)
 python -m pytest tests/ -q
 
 # Run a single test file / test

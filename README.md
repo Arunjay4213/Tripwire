@@ -113,7 +113,7 @@ python scripts/ci/check_asr_threshold.py --results results.json --threshold 0.5
 ```bash
 git clone https://github.com/Arunjay4213/Tripwire && cd Tripwire
 pip install -e ".[dev]"     # or: uv pip install -e ".[dev]"
-pytest                      # 293 offline tests, no network
+pytest                      # 295 offline tests, no network
 ```
 
 ## License

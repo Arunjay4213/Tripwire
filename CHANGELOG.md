@@ -5,12 +5,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-10
+
 Hardening pass for the open-source release.
 
 ### Fixed
 
 - Bad configs now print a single clear `Error: ...` line and exit non-zero instead of a Python traceback.
-  This covers a missing file, an empty or comment-only file, a non-mapping top level, a missing required key, and an unknown adapter/attack/scenario/defense name.
+  This covers a missing file, an empty or comment-only file, a non-mapping top level, a missing required key, an unknown adapter/attack/scenario/defense name, and a scalar where a list is required (e.g. `seeds: 5`).
 - The adaptive attackers (`iterative`, `tree_attacker`) no longer silently skip a whole campaign when no attacker model is set in the environment.
   They fall back to the model under test; `ATTACKER_MODEL` still overrides it for a separate, stronger attacker.
 - The LangGraph adapter no longer crashes when the model requests a tool it was never given (a hallucinated or defense-filtered tool); it reports the call as unavailable, matching the multi-agent adapter.
@@ -24,6 +26,8 @@ Hardening pass for the open-source release.
 - Removed the required `suites` config key, which nothing in the run path used.
   Existing configs that still carry a stray `suites:` key keep loading; the key is ignored.
 - Bounded the `langgraph` and `langchain-core` dependencies to `<2` to avoid a future major release breaking a fresh install.
+- The starter, example, and CI configs now lead with a strong attack, so a `--smoke` run demonstrates a real leak instead of running only the near-zero `direct` baseline.
+- Renamed the GitHub Actions workflow to `CI` so the README status badge label matches.
 
 ### Removed
 
@@ -32,6 +36,7 @@ Hardening pass for the open-source release.
 ### Added
 
 - `SECURITY.md` describing how to report a vulnerability and what is in scope for a red-team eval harness.
+- `CONTRIBUTING.md` with dev setup, the adapter/attack/defense/scenario extension points, and conventions.
 - This changelog.
 
 ## [0.1.0] - 2026-08-10
@@ -51,5 +56,6 @@ Initial release.
 - A CI gate (`scripts/ci/check_asr_threshold.py`) that fails the build when attack success rate exceeds a threshold.
 - Provider-agnostic client for any OpenAI-compatible endpoint, and an optional AgentDojo bridge.
 
-[Unreleased]: https://github.com/Arunjay4213/Tripwire/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Arunjay4213/Tripwire/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Arunjay4213/Tripwire/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Arunjay4213/Tripwire/releases/tag/v0.1.0
