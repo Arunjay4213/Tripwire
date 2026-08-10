@@ -6,7 +6,7 @@ from langgraph.graph.message import add_messages
 from langchain_core.messages import convert_to_openai_messages
 from typing import Annotated, TypedDict
 
-from src.harness.llm import make_client
+from tripwire.harness.llm import make_client
 
 from ._langgraph_shared import messages_to_trace_steps, openai_message_to_dict, run_tool as _run_tool
 from .base import EpisodeSpec, NormalizedTrace

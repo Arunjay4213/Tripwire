@@ -20,3 +20,8 @@ runs/
 
 # IDE
 .idea/
+
+# build artifacts
+dist/
+*.egg-info/
+build/

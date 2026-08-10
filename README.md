@@ -15,15 +15,35 @@ match — everything downstream of that (attack suites, defenses, adaptive
 attackers, multi-agent pipelines) is built on top of that one deterministic
 check.
 
+## Install
+
+```bash
+pip install tripwire          # or: uv pip install tripwire
+```
+
+Core install is small (an OpenAI-compatible client, LangGraph adapters). Opt into the heavier pieces:
+
+```bash
+pip install "tripwire[agentdojo]"   # the real AgentDojo benchmark bridge
+pip install "tripwire[viz]"         # Pareto / analysis plots
+pip install "tripwire[all]"         # everything
+```
+
+Or run it without installing, via uv:
+
+```bash
+uvx tripwire --config path/to/threat_model.yaml --smoke
+```
+
 ## 60-second quickstart
 
 ```bash
-git clone <this repo> && cd Tripwire
-pip install -r requirements.txt
-cp .env.example .env   # fill in GROQ_API_KEY -- free tier: console.groq.com
+cp .env.example .env   # set OPENAI_API_KEY (or GROQ_API_KEY -- free tier: console.groq.com)
 
-python -m src --config src/config/threat_model.example.yaml --smoke
+tripwire --config tripwire/config/threat_model.example.yaml --smoke
 ```
+
+(From a source checkout: `pip install -e ".[dev]"` then `python -m tripwire …`; run the tests with `pytest`.)
 
 That runs a small sweep — the built-in `raw_loop` and `langgraph` reference
 adapters against a real model, under one attack — and prints an ASR (attack
@@ -46,7 +66,7 @@ to keep you honest about that; run more seeds before trusting a number.)
 **Point it at your own agent** instead of the built-in ones:
 
 ```bash
-python -m src --config src/config/threat_model.example.yaml \
+python -m tripwire --config tripwire/config/threat_model.example.yaml \
     --agent examples/byo_agent_example.py --smoke
 ```
 
@@ -68,7 +88,7 @@ then (given a `GROQ_API_KEY` secret) runs a smoke attack sweep against a
 *defended* config and fails if attack success rate exceeds a threshold:
 
 ```bash
-python -m src --config src/config/ci.example.yaml --smoke --output results/results.json
+python -m tripwire --config tripwire/config/ci.example.yaml --smoke --output results/results.json
 python scripts/ci/check_asr_threshold.py --results results/results.json --threshold 0.5
 ```
 
@@ -115,7 +135,7 @@ agent + task  ──>  adapter  ──>  normalized trace  ──>  judge  ─�
                                                           no LLM)
 ```
 
-Every orchestrator plugs in behind one contract (`src/adapters/base.py`): it
+Every orchestrator plugs in behind one contract (`tripwire/adapters/base.py`): it
 takes an `EpisodeSpec` and returns a `NormalizedTrace`. The judge, the
 attacks, and the defenses all read *only* that trace — they never know which
 framework actually ran, which is what makes the adapter-vs-adapter comparison
@@ -125,11 +145,11 @@ fair instead of hand-wavy.
 
 | Path | What |
 |------|------|
-| `src/harness/` | runner (episode + campaign orchestration), canary injection, deterministic judge, reporter, Wilson CI |
-| `src/adapters/` | the `Adapter` contract + `raw_loop`, `langgraph`, `multi_agent`, and the `--agent`/registry loader |
-| `src/attacks/` | templated + adaptive injection strategies |
-| `src/defenses/` | the `Defense` contract + the ladder: `prompt_hardening`, `spotlighting`, `tool_filter`, `outbound_guard` |
-| `src/config/` | YAML config loader + example threat model |
+| `tripwire/harness/` | runner (episode + campaign orchestration), canary injection, deterministic judge, reporter, Wilson CI |
+| `tripwire/adapters/` | the `Adapter` contract + `raw_loop`, `langgraph`, `multi_agent`, and the `--agent`/registry loader |
+| `tripwire/attacks/` | templated + adaptive injection strategies |
+| `tripwire/defenses/` | the `Defense` contract + the ladder: `prompt_hardening`, `spotlighting`, `tool_filter`, `outbound_guard` |
+| `tripwire/config/` | YAML config loader + example threat model |
 | `examples/` | runnable BYO-agent references: `my_agent.py` (LangGraph) and `byo_agent_example.py` (raw loop) |
 | `spike/` | week-0 experiments that validated the approach before the full build |
 | `docs/` | provider ToS notes |
@@ -141,7 +161,7 @@ tests, offline and fast — no network calls in the test suite itself). Not yet
 built: a CrewAI adapter (the third leg of the original orchestrator-comparison
 bet) and a real AgentDojo suite integration (the current benign task is a
 small, deterministic scripted scenario by design — see the code comments in
-`src/harness/runner.py` for why that tradeoff was made over wiring in
+`tripwire/harness/runner.py` for why that tradeoff was made over wiring in
 AgentDojo's own environment model).
 
 ## Credits

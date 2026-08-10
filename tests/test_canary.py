@@ -2,7 +2,7 @@
 
 import re
 
-from src.harness.canary import inject, make_canary
+from tripwire.harness.canary import inject, make_canary
 
 
 def test_deterministic():

@@ -38,8 +38,8 @@ from typing import Callable
 
 from openai import OpenAI
 
-from src.harness.judge import Observation
-from src.harness.llm import make_client, resolve_model
+from tripwire.harness.judge import Observation
+from tripwire.harness.llm import make_client, resolve_model
 
 # evaluate(payload) -> Observation. Supplied by the runner; runs the payload
 # against the real target+defense and returns the attacker-visible feedback.

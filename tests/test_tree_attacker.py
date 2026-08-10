@@ -13,13 +13,13 @@ import json
 
 import pytest
 
-from src.attacks.tree_attacker import (
+from tripwire.attacks.tree_attacker import (
     TreeAttacker,
     TreeResult,
     _parse_refinements,
     default_scorer,
 )
-from src.harness.judge import Observation
+from tripwire.harness.judge import Observation
 
 
 # --- JSON parsing (attacker output is messy in practice) ---------------------
@@ -182,8 +182,8 @@ def test_search_prunes_to_width():
 
 
 def test_protocol_name_and_registry():
-    from src.attacks.base import Attack
-    from src.config.loader import resolve_attacks
+    from tripwire.attacks.base import Attack
+    from tripwire.config.loader import resolve_attacks
     atk = resolve_attacks(["tree_attacker"])[0]
     assert atk.name == "tree_attacker"
     assert isinstance(atk, Attack) or hasattr(atk, "search")  # campaign attacker

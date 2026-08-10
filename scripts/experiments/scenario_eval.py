@@ -15,15 +15,15 @@ sys.path.insert(0, os.getcwd())
 from dotenv import load_dotenv
 load_dotenv(".env", override=True)
 
-from src.adapters.raw_loop import RawLoopAdapter
-from src.config.loader import resolve_attacks
-from src.defenses.base import NoDefense
-from src.defenses.prompt_hardening import PromptHardening
-from src.defenses.spotlighting import Spotlighting
-from src.harness.judge import attack_exfiltrated
-from src.harness.llm import make_client, resolve_model
-from src.harness.stats import wilson_ci
-from src.scenarios import SCENARIOS
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.config.loader import resolve_attacks
+from tripwire.defenses.base import NoDefense
+from tripwire.defenses.prompt_hardening import PromptHardening
+from tripwire.defenses.spotlighting import Spotlighting
+from tripwire.harness.judge import attack_exfiltrated
+from tripwire.harness.llm import make_client, resolve_model
+from tripwire.harness.stats import wilson_ci
+from tripwire.scenarios import SCENARIOS
 
 MODEL = resolve_model()
 N = int(os.getenv("N", "8"))

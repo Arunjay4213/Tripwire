@@ -18,12 +18,12 @@ sys.path.insert(0, os.getcwd())
 from dotenv import load_dotenv
 load_dotenv(".env", override=True)
 
-from src.adapters.raw_loop import RawLoopAdapter
-from src.defenses.base import NoDefense
-from src.defenses.spotlighting import Spotlighting
-from src.environments.agentdojo_bridge import run_agentdojo_episode
-from src.harness.llm import make_client, resolve_model
-from src.harness.stats import wilson_ci
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.defenses.base import NoDefense
+from tripwire.defenses.spotlighting import Spotlighting
+from tripwire.environments.agentdojo_bridge import run_agentdojo_episode
+from tripwire.harness.llm import make_client, resolve_model
+from tripwire.harness.stats import wilson_ci
 
 MODEL = resolve_model()
 adapter = RawLoopAdapter(make_client())

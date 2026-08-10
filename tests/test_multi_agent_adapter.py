@@ -12,10 +12,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.adapters.base import EpisodeSpec
-from src.adapters.multi_agent_adapter import ACTOR_SYSTEM_PROMPT, MultiAgentAdapter
-from src.harness.canary import make_canary
-from src.harness.judge import attack_succeeded, task_completed
+from tripwire.adapters.base import EpisodeSpec
+from tripwire.adapters.multi_agent_adapter import ACTOR_SYSTEM_PROMPT, MultiAgentAdapter
+from tripwire.harness.canary import make_canary
+from tripwire.harness.judge import attack_succeeded, task_completed
 
 CANARY = make_canary(0)
 
@@ -159,7 +159,7 @@ def test_task_completed_works_through_the_relay():
     """The utility signal (task_completed) is source-agent-agnostic -- it
     scores whatever send_email call actually happened, regardless of which
     agent in the pipeline made it."""
-    from src.harness.judge import BENIGN_RECIPIENT, INVOICE_TOTAL
+    from tripwire.harness.judge import BENIGN_RECIPIENT, INVOICE_TOTAL
 
     adapter = MultiAgentAdapter()
     adapter.client.chat.completions.create = MagicMock(side_effect=[

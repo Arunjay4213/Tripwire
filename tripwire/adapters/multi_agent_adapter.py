@@ -17,7 +17,7 @@ unmodified. Each agent's tool subset is derived from spec.tools/tool_impls
 at run() time (not hardcoded), so an upstream defense (e.g. tool_filter
 removing send_email from spec.tools entirely) still constrains Agent B
 exactly like it would constrain a single agent -- see ADAPTER_REGISTRY in
-src/adapters/loader.py for how this plugs in as just another adapter name.
+tripwire/adapters/loader.py for how this plugs in as just another adapter name.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from langchain_core.messages import convert_to_openai_messages
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 
-from src.harness.llm import make_client
+from tripwire.harness.llm import make_client
 
 from ._langgraph_shared import messages_to_trace_steps, openai_message_to_dict, run_tool as _run_tool
 from .base import EpisodeSpec, NormalizedTrace

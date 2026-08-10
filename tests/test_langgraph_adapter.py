@@ -3,7 +3,7 @@
 The Groq/OpenAI client is mocked so these tests run offline and
 deterministically: we hand-script two model turns (one tool call, then a
 final answer) and check the adapter turns them into the right
-NormalizedTrace, per the Adapter contract in src/adapters/base.py.
+NormalizedTrace, per the Adapter contract in tripwire/adapters/base.py.
 
 spec.task/spec.tools follow the same shape raw_loop.py expects (see
 tests/test_raw_loop.py) so both adapters plug into runner.run_episode()
@@ -16,8 +16,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
-from src.adapters.base import EpisodeSpec
-from src.adapters.langgraph_adapter import LangGraphAdapter
+from tripwire.adapters.base import EpisodeSpec
+from tripwire.adapters.langgraph_adapter import LangGraphAdapter
 
 
 def _fake_response(content=None, tool_calls=None):

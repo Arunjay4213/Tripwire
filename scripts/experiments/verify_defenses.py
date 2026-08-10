@@ -30,19 +30,19 @@ sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
 
-from src.adapters.base import EpisodeSpec
-from src.adapters.raw_loop import RawLoopAdapter
-from src.attacks.agentdojo_wrappers import DirectAttack
-from src.attacks.fixed_injection import ForgedBoundary, MetadataExfil, PublicIdentifier
-from src.defenses.base import NoDefense
-from src.defenses.outbound_guard import _DETECTOR_SYSTEM_PROMPT, OutboundGuard
-from src.defenses.prompt_hardening import PromptHardening
-from src.defenses.spotlighting import Spotlighting
-from src.harness.canary import make_canary
-from src.harness.judge import INVOICE_TOTAL, attack_succeeded
-from src.harness.llm import make_client, resolve_model
-from src.harness.runner import BENIGN_RECIPIENT, BENIGN_TASK_EMAIL_BODY, TOOL_SCHEMAS
-from src.harness.stats import wilson_ci
+from tripwire.adapters.base import EpisodeSpec
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.attacks.agentdojo_wrappers import DirectAttack
+from tripwire.attacks.fixed_injection import ForgedBoundary, MetadataExfil, PublicIdentifier
+from tripwire.defenses.base import NoDefense
+from tripwire.defenses.outbound_guard import _DETECTOR_SYSTEM_PROMPT, OutboundGuard
+from tripwire.defenses.prompt_hardening import PromptHardening
+from tripwire.defenses.spotlighting import Spotlighting
+from tripwire.harness.canary import make_canary
+from tripwire.harness.judge import INVOICE_TOTAL, attack_succeeded
+from tripwire.harness.llm import make_client, resolve_model
+from tripwire.harness.runner import BENIGN_RECIPIENT, BENIGN_TASK_EMAIL_BODY, TOOL_SCHEMAS
+from tripwire.harness.stats import wilson_ci
 
 load_dotenv()
 MODEL = resolve_model()

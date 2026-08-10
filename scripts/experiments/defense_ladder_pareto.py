@@ -25,11 +25,11 @@ sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
 
-from src.adapters.raw_loop import RawLoopAdapter
-from src.config.loader import resolve_attacks, resolve_defenses
-from src.harness.llm import make_client, resolve_model
-from src.harness.reporter import print_asr_table, write_results
-from src.harness.runner import run_sweep
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.config.loader import resolve_attacks, resolve_defenses
+from tripwire.harness.llm import make_client, resolve_model
+from tripwire.harness.reporter import print_asr_table, write_results
+from tripwire.harness.runner import run_sweep
 
 load_dotenv()
 MODEL = resolve_model()

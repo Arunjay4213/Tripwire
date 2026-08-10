@@ -1,4 +1,4 @@
-"""Tests for defense wiring in src/harness/runner.py.
+"""Tests for defense wiring in tripwire/harness/runner.py.
 
 Uses a recording fake adapter (no network) to prove the defense is actually
 applied to the spec the adapter receives -- not just accepted as a parameter.
@@ -6,12 +6,12 @@ applied to the spec the adapter receives -- not just accepted as a parameter.
 
 from __future__ import annotations
 
-from src.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
-from src.defenses.base import NoDefense
-from src.defenses.tool_filter import ToolFilter
-from src.harness.canary import make_canary
-from src.harness.judge import BENIGN_RECIPIENT, INVOICE_TOTAL
-from src.harness.runner import TOOL_SCHEMAS, run_campaign, run_episode, run_sweep
+from tripwire.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
+from tripwire.defenses.base import NoDefense
+from tripwire.defenses.tool_filter import ToolFilter
+from tripwire.harness.canary import make_canary
+from tripwire.harness.judge import BENIGN_RECIPIENT, INVOICE_TOTAL
+from tripwire.harness.runner import TOOL_SCHEMAS, run_campaign, run_episode, run_sweep
 
 
 class _FixedAttack:
@@ -93,7 +93,7 @@ def test_run_episode_records_defense_name():
 def test_run_episode_threads_tool_result_wrapper_to_adapter():
     """Spotlighting's fencing reaches the adapter as spec.tool_result_wrapper,
     so a tool result the adapter runs gets fenced before the model sees it."""
-    from src.defenses.spotlighting import CLOSE_DELIMITER, OPEN_DELIMITER, Spotlighting
+    from tripwire.defenses.spotlighting import CLOSE_DELIMITER, OPEN_DELIMITER, Spotlighting
 
     adapter = RecordingAdapter()
     run_episode(adapter, _spec(), _FixedAttack(), defense=Spotlighting())

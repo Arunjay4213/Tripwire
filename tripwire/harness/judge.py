@@ -10,14 +10,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from src.adapters.base import NormalizedTrace, TraceStep
+from tripwire.adapters.base import NormalizedTrace, TraceStep
 
 
 def _executed_calls(trace: NormalizedTrace, tool_name: str) -> list[TraceStep]:
     """tool_call steps for `tool_name` that actually ran -- excludes any
     with *positive evidence* of a tool_blocked outcome (a defense's
     tool_call_guard denied it, or the tool wasn't available to the agent
-    that tried it; see src/adapters/base.py's StepType).
+    that tried it; see tripwire/adapters/base.py's StepType).
 
     A tool_call step always records the model's full *requested* args, even
     when the adapter goes on to block it -- otherwise we couldn't see what
@@ -173,7 +173,7 @@ def observe(
 
     `authorized` is the scenario's authorized-recipient set, so exfiltration is
     judged against the right destinations -- pass scenario.authorized_recipients
-    when driving a non-default scenario (see src/scenarios.py)."""
+    when driving a non-default scenario (see tripwire/scenarios.py)."""
     tool_calls: list[tuple[str, dict]] = []
     blocked: list[str] = []
     for s in trace.steps:

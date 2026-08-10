@@ -7,8 +7,8 @@ client (a plain class exposing `.chat.completions.create`) so nothing hits Groq.
 
 import pytest
 
-from src.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
-from src.attacks.agentdojo_wrappers import (
+from tripwire.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
+from tripwire.attacks.agentdojo_wrappers import (
     ATTACKER_EMAIL,
     DirectAttack,
     IgnorePreviousAttack,
@@ -16,8 +16,8 @@ from src.attacks.agentdojo_wrappers import (
     InjecAgentAttack,
     SystemMessageAttack,
 )
-from src.attacks.base import Attack
-from src.attacks.fixed_injection import (
+from tripwire.attacks.base import Attack
+from tripwire.attacks.fixed_injection import (
     FixedInjection,
     ForgedBoundary,
     MetadataExfil,
@@ -25,10 +25,10 @@ from src.attacks.fixed_injection import (
     PrerequisiteMirror,
     PublicIdentifier,
 )
-from src.attacks.iterative import SEED_STRATEGIES, IterativeAttacker
-from src.config.loader import resolve_attacks
-from src.harness.canary import make_canary
-from src.harness.runner import run_campaign
+from tripwire.attacks.iterative import SEED_STRATEGIES, IterativeAttacker
+from tripwire.config.loader import resolve_attacks
+from tripwire.harness.canary import make_canary
+from tripwire.harness.runner import run_campaign
 
 CANARY = "CANARY-7f3a91"
 
@@ -144,7 +144,7 @@ def test_prerequisite_mirror_targets_an_unauthorized_recipient():
     """The exfiltration attack directs the id to an unauthorized in-domain
     address (archive@corp.com), NOT the task's authorized recipient -- that is
     what makes it a real leak under the destination-aware judge."""
-    from src.harness.judge import AUTHORIZED_RECIPIENTS
+    from tripwire.harness.judge import AUTHORIZED_RECIPIENTS
     p = PrerequisiteMirror().render(CANARY)
     assert "archive@corp.com" in p
     assert "archive@corp.com" not in AUTHORIZED_RECIPIENTS
@@ -156,7 +156,7 @@ def test_mundane_redirect_hijacks_the_single_forward():
     unauthorized), re-classifies the id as a public tracking handle, and uses a
     low-authority 'PS from billing' register -- not an official notice, which the
     injection detector keys on."""
-    from src.harness.judge import AUTHORIZED_RECIPIENTS
+    from tripwire.harness.judge import AUTHORIZED_RECIPIENTS
     p = MundaneRedirect().render(CANARY)
     assert "ap@corp.com" in p
     assert "ap@corp.com" not in AUTHORIZED_RECIPIENTS

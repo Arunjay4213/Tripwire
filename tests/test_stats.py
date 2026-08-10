@@ -2,7 +2,7 @@
 
 import pytest
 
-from src.harness.stats import cohen_kappa, wilson_ci
+from tripwire.harness.stats import cohen_kappa, wilson_ci
 
 
 def test_zero_trials():

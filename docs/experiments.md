@@ -76,7 +76,7 @@ langgraph: n=0 -- no data. Budget exhausted before any campaign ran.
 - **4 of the 7 breaks happened at exactly attempt 2.** That's a suspiciously
   uniform pattern for 7 independent LLM trials — possibly the attacker's
   second seed strategy (of 4 rotating templates, see
-  `src/attacks/iterative.py`) is unusually effective against this specific
+  `tripwire/attacks/iterative.py`) is unusually effective against this specific
   model, possibly a smaller behavioral space than "adaptive refinement"
   implies. Don't smooth this over; it's worth investigating before citing
   "attempts to break" as a clean metric.

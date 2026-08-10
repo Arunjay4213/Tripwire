@@ -14,14 +14,14 @@ sys.path.insert(0, os.getcwd())
 from dotenv import load_dotenv
 load_dotenv(".env", override=True)
 
-from src.adapters.raw_loop import RawLoopAdapter
-from src.attacks.tree_attacker import TreeAttacker
-from src.defenses.base import NoDefense
-from src.defenses.prompt_hardening import PromptHardening
-from src.defenses.spotlighting import Spotlighting
-from src.harness.llm import make_client, resolve_model
-from src.harness.runner import run_scenario_tree_campaign
-from src.scenarios import SCENARIOS
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.attacks.tree_attacker import TreeAttacker
+from tripwire.defenses.base import NoDefense
+from tripwire.defenses.prompt_hardening import PromptHardening
+from tripwire.defenses.spotlighting import Spotlighting
+from tripwire.harness.llm import make_client, resolve_model
+from tripwire.harness.runner import run_scenario_tree_campaign
+from tripwire.scenarios import SCENARIOS
 
 MODEL = resolve_model()
 adapter = RawLoopAdapter(make_client())

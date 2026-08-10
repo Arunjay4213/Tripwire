@@ -18,8 +18,8 @@ import json
 
 from dotenv import load_dotenv
 
-from src.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
-from src.harness.llm import make_client
+from tripwire.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
+from tripwire.harness.llm import make_client
 
 load_dotenv()
 

@@ -1,6 +1,6 @@
 """Example "bring your own agent" file for `python -m tripwire --agent`.
 
-Tripwire's whole adapter contract is two things (src/adapters/base.py):
+Tripwire's whole adapter contract is two things (tripwire/adapters/base.py):
 `EpisodeSpec` in, `NormalizedTrace` out. A BYO agent file just needs to
 satisfy that same contract -- there's no second, simplified interface to
 learn. Define ONE of:
@@ -8,7 +8,7 @@ learn. Define ONE of:
   - `run(spec: EpisodeSpec) -> NormalizedTrace`   (this file's approach)
   - `adapter = SomeObject()` with `.name` and `.run(spec) -> NormalizedTrace`
     (use this if your agent is already a class/object, e.g. you're wrapping
-    an existing framework integration the way src/adapters/langgraph_adapter.py
+    an existing framework integration the way tripwire/adapters/langgraph_adapter.py
     does)
 
 This example is intentionally the simplest possible tool loop -- a trimmed
@@ -17,7 +17,7 @@ agent's equivalent of the run() function below; the goal is showing the
 minimum surface area required, not a reference implementation.
 
 Run it:
-    python -m tripwire --config src/config/threat_model.example.yaml \
+    python -m tripwire --config tripwire/config/threat_model.example.yaml \
         --agent examples/byo_agent_example.py --smoke
 """
 
@@ -27,8 +27,8 @@ import json
 
 from dotenv import load_dotenv
 
-from src.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
-from src.harness.llm import make_client
+from tripwire.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
+from tripwire.harness.llm import make_client
 
 load_dotenv()
 

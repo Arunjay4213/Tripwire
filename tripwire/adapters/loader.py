@@ -1,6 +1,6 @@
 """Adapter registry — map adapter name strings to instantiated Adapter objects.
 
-Mirrors src/config/loader.py's resolve_attacks(): a name -> class registry,
+Mirrors tripwire/config/loader.py's resolve_attacks(): a name -> class registry,
 looked up by name, raising a clear error on an unknown name.
 """
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from openai import OpenAI
 
-from src.harness.llm import make_client
+from tripwire.harness.llm import make_client
 
 from .base import Adapter, EpisodeSpec, NormalizedTrace
 from .langgraph_adapter import LangGraphAdapter
@@ -59,7 +59,7 @@ def load_agent_module(path: str) -> Adapter:
     Runs the same attack suite, environment, judge, and reporting as the
     built-in adapters -- BYO just swaps out what actually executes the tool
     loop, via the same EpisodeSpec/NormalizedTrace contract every adapter in
-    this codebase already implements (see src/adapters/base.py). No second,
+    this codebase already implements (see tripwire/adapters/base.py). No second,
     simplified interface to document or drift out of sync with the real one.
 
     The file at `path` must define exactly one of:

@@ -23,9 +23,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from src.adapters.base import EpisodeSpec
-from src.defenses.base import Defense, NoDefense
-from src.harness.canary import inject, make_canary
+from tripwire.adapters.base import EpisodeSpec
+from tripwire.defenses.base import Defense, NoDefense
+from tripwire.harness.canary import inject, make_canary
 
 
 def _tool_schemas(read_tool: str, read_desc: str) -> list[dict]:

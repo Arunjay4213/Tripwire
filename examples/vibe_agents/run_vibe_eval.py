@@ -18,14 +18,14 @@ sys.path.insert(0, os.getcwd())
 from dotenv import load_dotenv
 load_dotenv(".env", override=True)
 
-from src.adapters.loader import load_agent_module
-from src.adapters.raw_loop import RawLoopAdapter
-from src.config.loader import resolve_attacks
-from src.defenses.base import NoDefense
-from src.defenses.spotlighting import Spotlighting
-from src.harness.llm import make_client, resolve_model
-from src.harness.reporter import print_asr_table
-from src.harness.runner import run_sweep
+from tripwire.adapters.loader import load_agent_module
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.config.loader import resolve_attacks
+from tripwire.defenses.base import NoDefense
+from tripwire.defenses.spotlighting import Spotlighting
+from tripwire.harness.llm import make_client, resolve_model
+from tripwire.harness.reporter import print_asr_table
+from tripwire.harness.runner import run_sweep
 
 MODEL = resolve_model()
 SEEDS = list(range(int(os.getenv("N", "3"))))

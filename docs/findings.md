@@ -37,7 +37,7 @@ The target samples at temperature, so small-n runs swing; these are pooled figur
 
 ## 3. Attacks generalize across scenarios
 
-`src/scenarios.py` replicates AgentDojo-style variety locally (invoice, helpdesk, calendar, expense).
+`tripwire/scenarios.py` replicates AgentDojo-style variety locally (invoice, helpdesk, calendar, expense).
 no_defense ASR, n=8:
 
 | Attack | invoice | helpdesk | calendar | expense |

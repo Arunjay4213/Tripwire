@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import pytest
 
-from src.adapters.base import Adapter
-from src.adapters.loader import load_agent_module
+from tripwire.adapters.base import Adapter
+from tripwire.adapters.loader import load_agent_module
 
 
 def test_missing_path_raises():
@@ -21,7 +21,7 @@ def test_missing_path_raises():
 def test_loads_bare_run_function(tmp_path):
     agent_file = tmp_path / "my_agent.py"
     agent_file.write_text(
-        "from src.adapters.base import NormalizedTrace\n"
+        "from tripwire.adapters.base import NormalizedTrace\n"
         "def run(spec):\n"
         "    return NormalizedTrace(steps=[], final_output='ok')\n"
     )
@@ -37,7 +37,7 @@ def test_loads_bare_run_function(tmp_path):
 def test_loads_adapter_object(tmp_path):
     agent_file = tmp_path / "my_object_agent.py"
     agent_file.write_text(
-        "from src.adapters.base import NormalizedTrace\n"
+        "from tripwire.adapters.base import NormalizedTrace\n"
         "class MyAdapter:\n"
         "    name = 'custom-name'\n"
         "    def run(self, spec):\n"
@@ -77,7 +77,7 @@ def test_adapter_object_takes_priority_over_run(tmp_path):
     """If a module defines both, `adapter` wins -- it's the more specific form."""
     agent_file = tmp_path / "both.py"
     agent_file.write_text(
-        "from src.adapters.base import NormalizedTrace\n"
+        "from tripwire.adapters.base import NormalizedTrace\n"
         "def run(spec):\n"
         "    return NormalizedTrace(steps=[], final_output='from function')\n"
         "class MyAdapter:\n"

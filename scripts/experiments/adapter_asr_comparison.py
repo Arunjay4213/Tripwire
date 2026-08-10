@@ -14,13 +14,13 @@ sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
 
-from src.adapters.langgraph_adapter import LangGraphAdapter
-from src.adapters.multi_agent_adapter import MultiAgentAdapter
-from src.adapters.raw_loop import RawLoopAdapter
-from src.attacks.agentdojo_wrappers import DirectAttack
-from src.harness.llm import make_client, resolve_model
-from src.harness.reporter import print_asr_table, write_results
-from src.harness.runner import run_sweep
+from tripwire.adapters.langgraph_adapter import LangGraphAdapter
+from tripwire.adapters.multi_agent_adapter import MultiAgentAdapter
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.attacks.agentdojo_wrappers import DirectAttack
+from tripwire.harness.llm import make_client, resolve_model
+from tripwire.harness.reporter import print_asr_table, write_results
+from tripwire.harness.runner import run_sweep
 
 load_dotenv()
 MODEL = resolve_model()

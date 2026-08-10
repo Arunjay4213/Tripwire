@@ -38,9 +38,9 @@ from agentdojo.functions_runtime import FunctionCall, FunctionsRuntime
 from agentdojo.task_suite.load_suites import get_suite
 from agentdojo.types import text_content_block_from_string
 
-from src.adapters.base import Adapter, EpisodeSpec, NormalizedTrace
-from src.defenses.base import Defense, NoDefense
-from src.harness.runner import EpisodeResult
+from tripwire.adapters.base import Adapter, EpisodeSpec, NormalizedTrace
+from tripwire.defenses.base import Defense, NoDefense
+from tripwire.harness.runner import EpisodeResult
 
 # A plain tool-using-assistant system prompt. AgentDojo's own pipeline uses a
 # similar one; a defense wraps this before the agent sees it.

@@ -4,7 +4,7 @@ Three things this doc covers:
 
 1. Three "vibecoded" sample agents - the kind of agent a developer throws together quickly - run through Tripwire's attack suite.
 2. A run of the real AgentDojo benchmark through Tripwire's bridge, to see how our target does on an external, environment-scored benchmark.
-3. Four AgentDojo-style scenarios replicated locally (`src/scenarios.py`), where our attacks get real ASR (up to 100%) on realistic, varied tasks.
+3. Four AgentDojo-style scenarios replicated locally (`tripwire/scenarios.py`), where our attacks get real ASR (up to 100%) on realistic, varied tasks.
 
 All numbers below are on `claude-haiku-4-5` via the Anthropic OpenAI-compatible endpoint.
 
@@ -26,7 +26,7 @@ Run them yourself:
 examples/vibe_agents/run_vibe_eval.py        # via the direnv python
 
 # or one agent through the real CLI path
-python -m src --config src/config/threat_model.example.yaml \
+python -m tripwire --config tripwire/config/threat_model.example.yaml \
     --agent examples/vibe_agents/vibe_context_stuffer.py
 ```
 
@@ -56,7 +56,7 @@ This is the concrete argument for instrumenting the agent you actually ship: a d
 
 ## 2. AgentDojo through the bridge
 
-`src/environments/agentdojo_bridge.py` runs a real AgentDojo workspace task through a Tripwire adapter: AgentDojo's prompt, its ~24 stateful tools, its injection attack, and - crucially - its own utility and security checks, which score on environment state, not on the trace.
+`tripwire/environments/agentdojo_bridge.py` runs a real AgentDojo workspace task through a Tripwire adapter: AgentDojo's prompt, its ~24 stateful tools, its injection attack, and - crucially - its own utility and security checks, which score on environment state, not on the trace.
 `scripts/experiments/agentdojo_eval.py` drives a grid of it.
 
 Grid: 3 user tasks x 3 injection tasks x 5 attacks (`direct`, `ignore_previous`, `system_message`, `injecagent`, `important_instructions`), for no_defense and spotlighting, on `raw_loop` + `claude-haiku-4-5`.
@@ -91,7 +91,7 @@ To measure our attacks on realistic tasks, we replicate AgentDojo's variety loca
 
 ## 3. AgentDojo-style scenarios, replicated locally
 
-`src/scenarios.py` recreates AgentDojo's realism and variety inside Tripwire's own harness, but with the structure our attacks are built for and the destination-aware judge scores.
+`tripwire/scenarios.py` recreates AgentDojo's realism and variety inside Tripwire's own harness, but with the structure our attacks are built for and the destination-aware judge scores.
 Four scenarios, each a different persona/task/tool, each with a secret ("integration instance id") in the agent's context, a legitimate send to an AUTHORIZED same-domain recipient, and the injection appended to the content the agent reads:
 
 | Scenario | Task | Authorized recipient |

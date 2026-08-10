@@ -3,7 +3,7 @@
 Same security-utility question as defense_ladder_pareto.py, but the environment
 is a real AgentDojo task instead of the scripted invoice scenario: real tools,
 real stateful environment, real utility/security checks (see
-src/environments/agentdojo_bridge.py). This is the credible, less-toy version
+tripwire/environments/agentdojo_bridge.py). This is the credible, less-toy version
 of the Pareto data.
 
 Writes results/agentdojo_ladder.json, plottable with pareto_plot.py:
@@ -28,12 +28,12 @@ sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
 
-from src.adapters.raw_loop import RawLoopAdapter
-from src.config.loader import resolve_defenses
-from src.environments.agentdojo_bridge import run_agentdojo_episode
-from src.harness.llm import make_client, resolve_model
-from src.harness.reporter import print_asr_table, write_results
-from src.harness.runner import EpisodeResult
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.config.loader import resolve_defenses
+from tripwire.environments.agentdojo_bridge import run_agentdojo_episode
+from tripwire.harness.llm import make_client, resolve_model
+from tripwire.harness.reporter import print_asr_table, write_results
+from tripwire.harness.runner import EpisodeResult
 
 load_dotenv()
 MODEL = resolve_model()

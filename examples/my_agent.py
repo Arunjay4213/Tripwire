@@ -2,10 +2,10 @@
 
 Run the full attack suite against this agent instead of the built-ins:
 
-    python -m src --config src/config/threat_model.example.yaml \
+    python -m tripwire --config tripwire/config/threat_model.example.yaml \
         --agent examples/my_agent.py --smoke
 
-The whole contract is two types (src/adapters/base.py): an `EpisodeSpec` comes
+The whole contract is two types (tripwire/adapters/base.py): an `EpisodeSpec` comes
 in, a `NormalizedTrace` goes out. Expose EITHER a module-level
 `run(spec) -> NormalizedTrace`, OR (as here) an `adapter` object with a `.name`
 and a `.run(spec)`. Point `--agent` at your own agent's equivalent of the graph
@@ -41,8 +41,8 @@ from langchain_core.messages import convert_to_openai_messages
 from langgraph.graph import END, StateGraph
 from langgraph.graph.message import add_messages
 
-from src.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
-from src.harness.llm import make_client
+from tripwire.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
+from tripwire.harness.llm import make_client
 
 load_dotenv()
 

@@ -12,11 +12,11 @@ from __future__ import annotations
 import pytest
 from agentdojo.attacks.base_attacks import MODEL_NAMES
 
-from src.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
-from src.defenses.base import NoDefense
-from src.defenses.prompt_hardening import PromptHardening
-from src.defenses.spotlighting import OPEN_DELIMITER, Spotlighting
-from src.environments.agentdojo_bridge import (
+from tripwire.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
+from tripwire.defenses.base import NoDefense
+from tripwire.defenses.prompt_hardening import PromptHardening
+from tripwire.defenses.spotlighting import OPEN_DELIMITER, Spotlighting
+from tripwire.environments.agentdojo_bridge import (
     AGENTDOJO_SYSTEM_PROMPT,
     AgentDojoEpisode,
     _agentdojo_model_name,
@@ -69,7 +69,7 @@ def test_spotlighting_wraps_tool_result_against_live_env():
 
 
 def test_tool_filter_offered_menu_can_be_restricted():
-    from src.defenses.tool_filter import ToolFilter
+    from tripwire.defenses.tool_filter import ToolFilter
 
     ep = _episode()
     # tool_filter allowlists by name; point it at real AgentDojo tool names.

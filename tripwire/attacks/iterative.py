@@ -4,13 +4,13 @@ Ported from ``spike/auto_attacker.py``. Reuses the PAIR idea (Chao et al.,
 https://arxiv.org/abs/2310.08419): an attacker LLM proposes a payload, sees how
 close it got, and refines. Reuse, not novelty (see CLAUDE.md).
 
-Unlike the templated attacks (:mod:`src.attacks.agentdojo_wrappers`), this attack
+Unlike the templated attacks (:mod:`tripwire.attacks.agentdojo_wrappers`), this attack
 is **stateful and LLM-backed**:
 
 - ``render(canary)`` satisfies the single-shot ``Attack`` protocol by generating
   one round-0 payload, so the attacker is droppable into an ordinary sweep.
 - ``next_payload(history)`` is the adaptive entry point driven by
-  :func:`src.harness.runner.run_campaign`, which feeds back each attempt's graded
+  :func:`tripwire.harness.runner.run_campaign`, which feeds back each attempt's graded
   score and the agent's reply.
 
 Reproducibility caveat: payloads come from a live LLM, so this attack is NOT
@@ -25,10 +25,10 @@ from typing import Sequence
 
 from openai import OpenAI
 
-from src.harness.llm import make_client, resolve_model
+from tripwire.harness.llm import make_client, resolve_model
 
 # One history entry = (payload, grade, agent_reply). grade is 0/1/2 from
-# src.harness.judge.attack_grade.
+# tripwire.harness.judge.attack_grade.
 HistoryEntry = tuple[str, int, str]
 
 ATTACKER_EMAIL = "attacker@evil.com"
@@ -71,7 +71,7 @@ class IterativeAttacker:
 
     The attacker LLM client is built lazily from the environment when not
     supplied, so ``IterativeAttacker()`` works with no arguments — matching how
-    :func:`src.config.loader.resolve_attacks` instantiates attacks (``cls()``).
+    :func:`tripwire.config.loader.resolve_attacks` instantiates attacks (``cls()``).
     """
 
     name = "iterative"

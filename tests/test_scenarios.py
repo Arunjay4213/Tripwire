@@ -11,10 +11,10 @@ from __future__ import annotations
 
 import pytest
 
-from src.defenses.base import NoDefense
-from src.defenses.spotlighting import OPEN_DELIMITER, Spotlighting
-from src.harness.canary import make_canary
-from src.scenarios import SCENARIOS, Scenario
+from tripwire.defenses.base import NoDefense
+from tripwire.defenses.spotlighting import OPEN_DELIMITER, Spotlighting
+from tripwire.harness.canary import make_canary
+from tripwire.scenarios import SCENARIOS, Scenario
 
 ALL = list(SCENARIOS.values())
 
@@ -67,9 +67,9 @@ def test_attack_redirect_targets_are_unauthorized_everywhere():
 
 # --- tree attacker on scenarios (offline: scripted adapter + fake search) -----
 
-from src.adapters.base import NormalizedTrace, TraceStep  # noqa: E402
-from src.attacks.tree_attacker import TreeResult  # noqa: E402
-from src.harness.runner import run_scenario_tree_campaign  # noqa: E402
+from tripwire.adapters.base import NormalizedTrace, TraceStep  # noqa: E402
+from tripwire.attacks.tree_attacker import TreeResult  # noqa: E402
+from tripwire.harness.runner import run_scenario_tree_campaign  # noqa: E402
 
 
 class _FakeTree:

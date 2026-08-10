@@ -1,23 +1,23 @@
 """Tests for the defense module — Defense protocol, NoDefense, ToolFilter,
-and resolve_defenses() in src/config/loader.py.
+and resolve_defenses() in tripwire/config/loader.py.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from src.config.loader import load_config, resolve_defenses
-from src.defenses.base import Defense, NoDefense
-from src.defenses.outbound_guard import OutboundGuard
-from src.defenses.prompt_hardening import PromptHardening
-from src.defenses.spotlighting import (
+from tripwire.config.loader import load_config, resolve_defenses
+from tripwire.defenses.base import Defense, NoDefense
+from tripwire.defenses.outbound_guard import OutboundGuard
+from tripwire.defenses.prompt_hardening import PromptHardening
+from tripwire.defenses.spotlighting import (
     CLOSE_DELIMITER,
     OPEN_DELIMITER,
     Spotlighting,
 )
-from src.defenses.tool_filter import ToolFilter
+from tripwire.defenses.tool_filter import ToolFilter
 
-EXAMPLE_CONFIG_PATH = "src/config/threat_model.example.yaml"
+EXAMPLE_CONFIG_PATH = "tripwire/config/threat_model.example.yaml"
 
 READ_INBOX_SCHEMA = {"type": "function", "function": {"name": "read_inbox"}}
 SEND_EMAIL_SCHEMA = {"type": "function", "function": {"name": "send_email"}}

@@ -26,16 +26,16 @@ sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
 
-from src.adapters.raw_loop import RawLoopAdapter
-from src.adapters.base import EpisodeSpec
-from src.attacks.tree_attacker import TreeAttacker
-from src.defenses.base import NoDefense
-from src.defenses.outbound_guard import OutboundGuard
-from src.defenses.prompt_hardening import PromptHardening
-from src.defenses.spotlighting import Spotlighting
-from src.harness.llm import make_client, resolve_model
-from src.harness.reporter import print_campaign_table, write_results
-from src.harness.runner import CampaignResult, run_tree_campaign
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.adapters.base import EpisodeSpec
+from tripwire.attacks.tree_attacker import TreeAttacker
+from tripwire.defenses.base import NoDefense
+from tripwire.defenses.outbound_guard import OutboundGuard
+from tripwire.defenses.prompt_hardening import PromptHardening
+from tripwire.defenses.spotlighting import Spotlighting
+from tripwire.harness.llm import make_client, resolve_model
+from tripwire.harness.reporter import print_campaign_table, write_results
+from tripwire.harness.runner import CampaignResult, run_tree_campaign
 
 load_dotenv()
 TARGET = resolve_model()

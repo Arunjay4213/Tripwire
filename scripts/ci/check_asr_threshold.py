@@ -1,6 +1,6 @@
 """CI gate — fail the build when attack success rate (ASR) exceeds a threshold.
 
-Reads a results JSON produced by `python -m src --output <path>` and exits
+Reads a results JSON produced by `python -m tripwire --output <path>` and exits
 non-zero when the measured ASR is above `--threshold`. This is the "run
 Tripwire in your CI" pitch made enforceable: point it at your deployed
 agent+defense config and a regression that reopens the leak turns the build

@@ -1,6 +1,6 @@
 """Tests for the adapter registry — resolve_adapters().
 
-Mirrors resolve_attacks() in src/config/loader.py: a name -> class registry,
+Mirrors resolve_attacks() in tripwire/config/loader.py: a name -> class registry,
 looked up by name, raising a clear error on an unknown name.
 """
 
@@ -8,11 +8,11 @@ from __future__ import annotations
 
 import pytest
 
-from src.adapters.base import Adapter
-from src.adapters.langgraph_adapter import LangGraphAdapter
-from src.adapters.loader import ADAPTER_REGISTRY, resolve_adapters
-from src.adapters.multi_agent_adapter import MultiAgentAdapter
-from src.adapters.raw_loop import RawLoopAdapter
+from tripwire.adapters.base import Adapter
+from tripwire.adapters.langgraph_adapter import LangGraphAdapter
+from tripwire.adapters.loader import ADAPTER_REGISTRY, resolve_adapters
+from tripwire.adapters.multi_agent_adapter import MultiAgentAdapter
+from tripwire.adapters.raw_loop import RawLoopAdapter
 
 
 @pytest.fixture(autouse=True)

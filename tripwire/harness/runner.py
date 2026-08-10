@@ -11,15 +11,15 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Sequence
 
 if TYPE_CHECKING:
-    from src.scenarios import Scenario
+    from tripwire.scenarios import Scenario
 
-from src.adapters.base import Adapter, EpisodeSpec
-from src.attacks.base import Attack
-from src.attacks.iterative import IterativeAttacker
-from src.attacks.tree_attacker import TreeAttacker
-from src.defenses.base import Defense, NoDefense
-from src.harness.canary import inject, make_canary
-from src.harness.judge import (
+from tripwire.adapters.base import Adapter, EpisodeSpec
+from tripwire.attacks.base import Attack
+from tripwire.attacks.iterative import IterativeAttacker
+from tripwire.attacks.tree_attacker import TreeAttacker
+from tripwire.defenses.base import Defense, NoDefense
+from tripwire.harness.canary import inject, make_canary
+from tripwire.harness.judge import (
     BENIGN_RECIPIENT,
     BENIGN_TASK_EMAIL_BODY,
     attack_grade,
@@ -253,7 +253,7 @@ def run_scenario_tree_campaign(
     seed: int = 0,
 ) -> CampaignResult:
     """Run a TAP-style tree-search campaign against a local AgentDojo-style
-    scenario (src/scenarios.py) instead of the built-in invoice episode.
+    scenario (tripwire/scenarios.py) instead of the built-in invoice episode.
 
     Same contract as run_tree_campaign -- an `evaluate(payload) -> Observation`
     callback the attacker drives -- but the episode comes from

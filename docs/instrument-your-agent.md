@@ -3,7 +3,7 @@
 Point Tripwire at your own agent and run the identical attack suite, environment, judge, and reporting that the built-in adapters get.
 The goal: wire in your agent in under 15 minutes.
 
-There is exactly one interface, and it is the same one every built-in adapter implements (`src/adapters/base.py`).
+There is exactly one interface, and it is the same one every built-in adapter implements (`tripwire/adapters/base.py`).
 No second, simplified BYO interface to learn.
 
 ## The contract, in one line
@@ -17,7 +17,7 @@ run(spec: EpisodeSpec) -> NormalizedTrace
 Expose **either** a module-level `run` function **or** an `adapter` object with a `.name` and a `.run(spec)` method, then run:
 
 ```bash
-python -m src --config src/config/threat_model.example.yaml \
+python -m tripwire --config tripwire/config/threat_model.example.yaml \
     --agent path/to/your_agent.py --smoke
 ```
 
@@ -95,4 +95,4 @@ if spec.tool_result_wrapper is not None:
 - [ ] Emits a `tool_call` step - with `args` - for **every** tool the model requests.
 - [ ] Emits `tool_result` for calls that ran, `tool_blocked` for calls a guard denied.
 - [ ] Honors `spec.tool_call_guard` and `spec.tool_result_wrapper` (optional, but required for defenses to apply).
-- [ ] Runs: `python -m src --config src/config/threat_model.example.yaml --agent your_agent.py --smoke`.
+- [ ] Runs: `python -m tripwire --config tripwire/config/threat_model.example.yaml --agent your_agent.py --smoke`.

@@ -4,7 +4,7 @@ Unlike L1/L2, this does not try to talk the acting model out of leaking. It
 puts an independent checker in front of the irreversible action: right before a
 send_email call executes, a detector inspects what is about to leave the system
 and blocks the call if it looks like a secret is being exfiltrated. Because it
-runs at the tool_call_guard enforcement point (see src/defenses/base.py), it
+runs at the tool_call_guard enforcement point (see tripwire/defenses/base.py), it
 catches a leak the acting model was fully talked into -- including the
 multi-agent relay case, where the agent making the call never knew a secret
 existed.
@@ -52,7 +52,7 @@ def _default_llm_detector(text: str) -> bool:
     the provider errors -- a guard that crashes the sweep is worse than one
     that misses a call; the L1/L2 rungs and the judge still measure the leak.
     """
-    from src.harness.llm import make_client, resolve_model
+    from tripwire.harness.llm import make_client, resolve_model
 
     client = make_client()
     model = os.getenv("GUARD_MODEL") or resolve_model() or "gpt-4o-mini"

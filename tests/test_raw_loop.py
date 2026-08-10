@@ -2,9 +2,9 @@
 
 from unittest.mock import MagicMock
 
-from src.adapters.base import EpisodeSpec, NormalizedTrace
-from src.adapters.raw_loop import RawLoopAdapter
-from src.harness.judge import attack_succeeded
+from tripwire.adapters.base import EpisodeSpec, NormalizedTrace
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.harness.judge import attack_succeeded
 
 
 def _make_message(content=None, tool_calls=None):

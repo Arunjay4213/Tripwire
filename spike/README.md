@@ -14,4 +14,4 @@ Write the §0.5 decision-gate outcome here before continuing:
 - ASR differs meaningfully + stably -> orchestrator finding is real.
 - ASR basically the same -> pivot headline to evaluation rigor itself.
 
-This dir is throwaway. Nothing here is imported by `src/`.
+This dir is throwaway. Nothing here is imported by `tripwire/`.

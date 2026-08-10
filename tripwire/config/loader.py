@@ -6,17 +6,17 @@ from dataclasses import dataclass, field
 
 import yaml
 
-from src.adapters.base import Adapter
-from src.adapters.loader import resolve_adapters
-from src.attacks.agentdojo_wrappers import (
+from tripwire.adapters.base import Adapter
+from tripwire.adapters.loader import resolve_adapters
+from tripwire.attacks.agentdojo_wrappers import (
     DirectAttack,
     IgnorePreviousAttack,
     ImportantInstructionsAttack,
     InjecAgentAttack,
     SystemMessageAttack,
 )
-from src.attacks.base import Attack
-from src.attacks.fixed_injection import (
+from tripwire.attacks.base import Attack
+from tripwire.attacks.fixed_injection import (
     FixedInjection,
     ForgedBoundary,
     MetadataExfil,
@@ -24,13 +24,13 @@ from src.attacks.fixed_injection import (
     PrerequisiteMirror,
     PublicIdentifier,
 )
-from src.attacks.iterative import IterativeAttacker
-from src.attacks.tree_attacker import TreeAttacker
-from src.defenses.base import Defense, NoDefense
-from src.defenses.outbound_guard import OutboundGuard
-from src.defenses.prompt_hardening import PromptHardening
-from src.defenses.spotlighting import Spotlighting
-from src.defenses.tool_filter import ToolFilter
+from tripwire.attacks.iterative import IterativeAttacker
+from tripwire.attacks.tree_attacker import TreeAttacker
+from tripwire.defenses.base import Defense, NoDefense
+from tripwire.defenses.outbound_guard import OutboundGuard
+from tripwire.defenses.prompt_hardening import PromptHardening
+from tripwire.defenses.spotlighting import Spotlighting
+from tripwire.defenses.tool_filter import ToolFilter
 
 # Registry of zero-argument defenses: name -> class, instantiated with cls().
 # tool_filter (needs allowed_tools) is handled separately in resolve_defenses.

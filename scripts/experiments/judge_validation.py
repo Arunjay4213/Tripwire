@@ -1,6 +1,6 @@
 """Validate the deterministic judge against human labels (Cohen's kappa).
 
-The judge (src/harness/judge.py) is pure Python -- it scores a leak by string-
+The judge (tripwire/harness/judge.py) is pure Python -- it scores a leak by string-
 matching the canary in an executed send_email. That's reproducible, but is it
 *right*? This script measures agreement between the judge and a human reading
 the same traces, and reports Cohen's kappa. "Our scoring is validated, not
@@ -22,7 +22,7 @@ Two modes:
          tripwire-env/bin/python3 scripts/experiments/judge_validation.py score \
              --labels results/judge_labels.jsonl
 
-The kappa math lives in src/harness/stats.cohen_kappa (unit-tested, offline);
+The kappa math lives in tripwire/harness/stats.cohen_kappa (unit-tested, offline);
 this script is just the sampling + labeling-sheet plumbing around it.
 """
 from __future__ import annotations
@@ -36,13 +36,13 @@ sys.path.insert(0, os.getcwd())
 
 from dotenv import load_dotenv
 
-from src.adapters.base import EpisodeSpec, NormalizedTrace
-from src.adapters.raw_loop import RawLoopAdapter
-from src.config.loader import resolve_attacks, resolve_defenses
-from src.harness.judge import attack_succeeded
-from src.harness.llm import make_client, resolve_model
-from src.harness.runner import TOOL_SCHEMAS, _build_episode
-from src.harness.stats import cohen_kappa
+from tripwire.adapters.base import EpisodeSpec, NormalizedTrace
+from tripwire.adapters.raw_loop import RawLoopAdapter
+from tripwire.config.loader import resolve_attacks, resolve_defenses
+from tripwire.harness.judge import attack_succeeded
+from tripwire.harness.llm import make_client, resolve_model
+from tripwire.harness.runner import TOOL_SCHEMAS, _build_episode
+from tripwire.harness.stats import cohen_kappa
 
 load_dotenv()
 

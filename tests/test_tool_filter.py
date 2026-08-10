@@ -1,9 +1,9 @@
-"""Tests for src/defenses/tool_filter.py."""
+"""Tests for tripwire/defenses/tool_filter.py."""
 
 from __future__ import annotations
 
-from src.defenses.base import Defense
-from src.defenses.tool_filter import ToolFilter
+from tripwire.defenses.base import Defense
+from tripwire.defenses.tool_filter import ToolFilter
 
 
 class _FakeFunction:

@@ -10,8 +10,8 @@ import statistics
 from collections import defaultdict
 from dataclasses import asdict
 
-from src.harness.runner import CampaignResult, EpisodeResult
-from src.harness.stats import wilson_ci
+from tripwire.harness.runner import CampaignResult, EpisodeResult
+from tripwire.harness.stats import wilson_ci
 
 
 def write_results(

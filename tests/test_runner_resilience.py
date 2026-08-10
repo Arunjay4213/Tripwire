@@ -10,13 +10,13 @@ from __future__ import annotations
 
 import pytest
 
-from src.adapters.base import EpisodeSpec, NormalizedTrace
-from src.harness.runner import run_sweep
+from tripwire.adapters.base import EpisodeSpec, NormalizedTrace
+from tripwire.harness.runner import run_sweep
 
 
 @pytest.fixture(autouse=True)
 def _no_real_sleep(monkeypatch):
-    monkeypatch.setattr("src.harness.runner.time.sleep", lambda *_: None)
+    monkeypatch.setattr("tripwire.harness.runner.time.sleep", lambda *_: None)
 
 
 class _FixedAttack:

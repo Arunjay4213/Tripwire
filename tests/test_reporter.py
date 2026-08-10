@@ -4,8 +4,8 @@ import json
 import os
 import tempfile
 
-from src.harness.reporter import print_asr_table, write_results
-from src.harness.runner import EpisodeResult
+from tripwire.harness.reporter import print_asr_table, write_results
+from tripwire.harness.runner import EpisodeResult
 
 
 def _results():

@@ -1,4 +1,4 @@
-"""CLI entrypoint — python -m src --config threat_model.yaml"""
+"""CLI entrypoint — python -m tripwire --config threat_model.yaml"""
 
 from __future__ import annotations
 
@@ -8,16 +8,16 @@ import sys
 
 from dotenv import load_dotenv
 
-# Allow running as `python -m tripwire` from repo root (src/ is the package
-# but imports use `from src.…`).  Ensure repo root is on sys.path.
+# Allow running as `python -m tripwire` from repo root (tripwire/ is the package
+# but imports use `from tripwire.…`).  Ensure repo root is on sys.path.
 _repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _repo_root not in sys.path:
     sys.path.insert(0, _repo_root)
 
-from src.adapters.loader import load_agent_module
-from src.config.loader import load_config, resolve_attacks
-from src.harness.reporter import print_asr_table, print_campaign_table, write_results
-from src.harness.runner import run_sweep
+from tripwire.adapters.loader import load_agent_module
+from tripwire.config.loader import load_config, resolve_attacks
+from tripwire.harness.reporter import print_asr_table, print_campaign_table, write_results
+from tripwire.harness.runner import run_sweep
 
 
 def main() -> None:

@@ -31,7 +31,7 @@ import matplotlib
 matplotlib.use("Agg")  # headless: render straight to a file, no display needed
 import matplotlib.pyplot as plt
 
-from src.harness.stats import wilson_ci
+from tripwire.harness.stats import wilson_ci
 
 # Ladder order (cheap-weak -> expensive-strong) and a colorblind-safe,
 # print-friendly color per rung. Okabe-Ito palette; order fixes both the

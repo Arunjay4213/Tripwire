@@ -8,8 +8,8 @@ Three core cases:
 
 import pytest
 
-from src.adapters.base import NormalizedTrace, TraceStep
-from src.harness.judge import (
+from tripwire.adapters.base import NormalizedTrace, TraceStep
+from tripwire.harness.judge import (
     BENIGN_RECIPIENT,
     INVOICE_TOTAL,
     attack_grade,
