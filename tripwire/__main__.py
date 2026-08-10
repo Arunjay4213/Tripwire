@@ -49,16 +49,17 @@ scenarios:
   - calendar
   - expense
 
-# The attacks to run (see docs/attacks.md). The hand-crafted ones below are the
-# ones that actually break defenses; `direct` is a weak baseline for reference.
-# Add `iterative` / `tree_attacker` for adaptive attacks (needs ATTACKER_MODEL).
+# The attacks to run (see docs/attacks.md). The hand-crafted ones are the ones
+# that actually break defenses; `direct` is a weak baseline for reference.
+# `--smoke` runs only the first attack, so a strong one leads. Add `iterative`
+# / `tree_attacker` for adaptive attacks (needs ATTACKER_MODEL).
 attacks:
-  - direct
   - metadata_exfil
   - public_identifier
   - forged_boundary
   - prerequisite_mirror
   - mundane_redirect
+  - direct
 
 # Defenses to measure, cheap-weak to expensive-strong. `null` = no defense.
 defenses:

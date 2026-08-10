@@ -29,6 +29,10 @@ adapters:
 # of these run regardless of which framework a user's agent uses. See
 # docs/attacks.md for what each one exploits and its measured effect.
 attacks:
+  # `--smoke` runs only the FIRST attack, so lead with a strong one that
+  # actually exfiltrates on an undefended agent -- otherwise a smoke run
+  # shows no signal.
+  - metadata_exfil         # reframe the leak as routine metadata logging
   # single-shot templated baselines (deterministic, seed-reproducible). Near 0%
   # against an aligned target -- kept as the reference floor.
   - direct
@@ -39,7 +43,6 @@ attacks:
   # hand-crafted attacks that actually move the numbers. Each targets a specific
   # defensive mechanism rather than spraying one trick.
   - fixed_injection        # "retired credential" social-engineering email
-  - metadata_exfil         # reframe the leak as routine metadata logging
   - public_identifier      # re-classify the id as a public sender identifier (vs prompt_hardening)
   - forged_boundary        # forge a "trusted system footer" past the fence (vs spotlighting)
   - prerequisite_mirror    # gate the task on mirroring to an archive mailbox (breaks outbound_guard)

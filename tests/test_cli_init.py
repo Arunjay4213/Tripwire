@@ -23,6 +23,9 @@ def test_init_writes_a_config_that_loads(tmp_path, monkeypatch):
     cfg = load_config(str(dest))
     assert [s.name for s in cfg.scenarios] == ["invoice", "helpdesk", "calendar", "expense"]
     assert "mundane_redirect" in cfg.attacks
+    # --smoke runs the first attack, so the starter must lead with a strong one
+    # (not the weak `direct` baseline) to show a real signal.
+    assert cfg.attacks[0] == "metadata_exfil"
 
 
 def test_init_refuses_overwrite_without_force(tmp_path):

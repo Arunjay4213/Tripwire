@@ -18,9 +18,11 @@ adapters:
   - raw_loop
 
 attacks:
-  - direct
-  - important_instructions
+  # `--smoke` (used by the CI gate) runs only the first attack, so lead with a
+  # strong one rather than the weak `direct` baseline.
   - fixed_injection
+  - important_instructions
+  - direct
 
 defenses:
   - tool_filter
