@@ -86,7 +86,7 @@ class CampaignResult:
 
 
 def _build_episode(
-    payload: str, spec: EpisodeSpec, defense: Defense = NoDefense()
+    payload: str, spec: EpisodeSpec, defense: Defense | None = None
 ) -> tuple[EpisodeSpec, str]:
     """Assemble the episode environment for one rendered payload.
 
@@ -110,6 +110,7 @@ def _build_episode(
     normal content the agent is already processing; this mirrors that instead
     of handing the model an email that's 100% attack.
     """
+    defense = defense or NoDefense()
     canary = make_canary(spec.environment_seed)
 
     environment = {
@@ -136,7 +137,7 @@ def _build_episode(
 
 def run_episode(
     adapter: Adapter, spec: EpisodeSpec, attack: Attack,
-    defense: Defense = NoDefense(), scenario: Scenario = INVOICE,
+    defense: Defense | None = None, scenario: Scenario = INVOICE,
 ) -> EpisodeResult:
     """Run one episode and score it.
 
@@ -150,6 +151,7 @@ def run_episode(
        would show 0% ASR and 0% utility, a very different (worse) result than
        0% ASR with 100% utility.
     """
+    defense = defense or NoDefense()
     # Render with a throwaway canary — attacks do not embed it (they trick the
     # agent into volunteering it), so the value passed here does not matter.
     payload = attack.render(make_canary(spec.environment_seed))
@@ -191,7 +193,7 @@ def run_campaign(
     spec: EpisodeSpec,
     attacker: IterativeAttacker,
     budget: int,
-    defense: Defense = NoDefense(),
+    defense: Defense | None = None,
     scenario: Scenario = INVOICE,
 ) -> CampaignResult:
     """Run one adaptive campaign: generate → run → grade → adapt, up to budget.
@@ -202,6 +204,7 @@ def run_campaign(
     authorized set), NOT merely the canary surfacing in the authorized email
     (grade 2).
     """
+    defense = defense or NoDefense()
     _ensure_attacker_model(attacker, spec.model)
     history: list[tuple[str, int, str]] = []
     for attempt in range(1, budget + 1):
@@ -241,7 +244,7 @@ def run_tree_campaign(
     spec: EpisodeSpec,
     attacker: TreeAttacker,
     budget: int,
-    defense: Defense = NoDefense(),
+    defense: Defense | None = None,
 ) -> CampaignResult:
     """Run one TAP-style tree-search campaign against a single seed.
 
@@ -251,6 +254,7 @@ def run_tree_campaign(
     feedback the attacker reasons over. `budget` caps target evaluations, so it
     stays comparable to run_campaign's budget across attackers.
     """
+    defense = defense or NoDefense()
     _ensure_attacker_model(attacker, spec.model)
 
     def evaluate(payload: str):
@@ -277,7 +281,7 @@ def run_scenario_tree_campaign(
     model: str,
     attacker: TreeAttacker,
     budget: int,
-    defense: Defense = NoDefense(),
+    defense: Defense | None = None,
     seed: int = 0,
 ) -> CampaignResult:
     """Run a TAP-style tree-search campaign against a local AgentDojo-style
@@ -290,6 +294,7 @@ def run_scenario_tree_campaign(
     scenario. The canary is fixed by `seed` for the whole campaign (one session,
     many payloads), exactly like the invoice path.
     """
+    defense = defense or NoDefense()
     _ensure_attacker_model(attacker, model)
 
     def evaluate(payload: str):
@@ -351,7 +356,7 @@ def run_sweep(
     attacks: Sequence[Attack],
     seeds: Sequence[int],
     campaign_budget: int = 8,
-    defenses: Sequence[Defense] = (NoDefense(),),
+    defenses: Sequence[Defense] | None = None,
     scenarios: Sequence[Scenario] = (INVOICE,),
 ) -> tuple[list[EpisodeResult], list[CampaignResult]]:
     """Loop adapters x models x scenarios x attacks x defenses x seeds.
@@ -367,6 +372,8 @@ def run_sweep(
     returned lists entirely -- not counted as failed attacks -- so n in the
     reporter's tables always reflects real, scored outcomes.
     """
+    if defenses is None:
+        defenses = (NoDefense(),)
     episodes: list[EpisodeResult] = []
     campaigns: list[CampaignResult] = []
     skipped = 0

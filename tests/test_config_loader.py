@@ -46,6 +46,17 @@ def test_missing_required_key_names_the_key(tmp_path, missing):
         load_config(_write(tmp_path, "\n".join(lines) + "\n"))
 
 
+@pytest.mark.parametrize("scalar_line", ["seeds: 5", "models: gpt-4o-mini"])
+def test_scalar_where_list_expected_raises_clear_error(tmp_path, scalar_line):
+    """A scalar where a list is required (e.g. `seeds: 5`) must fail at load
+    with a clear message, not a cryptic TypeError deep in run_sweep."""
+    key = scalar_line.split(":")[0]
+    lines = [ln for ln in _VALID.splitlines() if not ln.startswith(f"{key}:")]
+    text = "\n".join(lines) + f"\n{scalar_line}\n"
+    with pytest.raises(ValueError, match="non-empty list"):
+        load_config(_write(tmp_path, text))
+
+
 def test_unknown_adapter_name_raises_value_error(tmp_path):
     text = _VALID.replace("adapters: [raw_loop]", "adapters: [nope]")
     with pytest.raises(ValueError, match="Unknown adapter"):

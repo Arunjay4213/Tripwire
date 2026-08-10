@@ -103,6 +103,14 @@ def load_config(path: str) -> TripwireConfig:
     for key in _REQUIRED_KEYS:
         if key not in raw:
             raise ValueError(f"Config missing required key: {key!r} (in {path})")
+        # A scalar (e.g. `seeds: 5`) would otherwise pass load and blow up later
+        # deep in run_sweep with a cryptic TypeError. Catch it here with a clear
+        # message, consistent with the other config errors.
+        if not isinstance(raw[key], list) or not raw[key]:
+            raise ValueError(
+                f"Config key {key!r} must be a non-empty list (in {path}); "
+                f"e.g. `{key}: [ ... ]`"
+            )
 
     limits = raw.get("limits", {}) or {}
     allowed_tools = raw.get("allowed_tools", [])
