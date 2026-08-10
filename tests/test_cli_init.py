@@ -14,7 +14,7 @@ def test_init_writes_a_config_that_loads(tmp_path, monkeypatch):
     assert dest.exists()
 
     data = yaml.safe_load(dest.read_text())
-    for key in ("models", "suites", "adapters", "scenarios", "attacks", "defenses", "seeds"):
+    for key in ("models", "adapters", "scenarios", "attacks", "defenses", "seeds"):
         assert key in data, key
 
     # and it resolves through the real config loader

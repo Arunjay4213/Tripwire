@@ -63,7 +63,6 @@ _ATTACK_REGISTRY: dict[str, type] = {
 @dataclass
 class TripwireConfig:
     models: list[str]
-    suites: list[str]
     attacks: list[str]
     adapters: list[Adapter]
     defenses: list[Defense]
@@ -77,7 +76,7 @@ class TripwireConfig:
 
 # Keys the config must define. Validated up front so a typo or omission yields a
 # clear message instead of a bare KeyError deep in construction.
-_REQUIRED_KEYS = ("models", "suites", "attacks", "adapters", "seeds")
+_REQUIRED_KEYS = ("models", "attacks", "adapters", "seeds")
 
 
 def load_config(path: str) -> TripwireConfig:
@@ -110,7 +109,6 @@ def load_config(path: str) -> TripwireConfig:
 
     return TripwireConfig(
         models=raw["models"],
-        suites=raw["suites"],
         attacks=raw["attacks"],
         adapters=resolve_adapters(raw["adapters"]),
         defenses=resolve_defenses(raw.get("defenses", [None]), allowed_tools),

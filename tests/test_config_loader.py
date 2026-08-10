@@ -10,7 +10,7 @@ import pytest
 
 from tripwire.config.loader import load_config
 
-_VALID = "models: [m]\nsuites: [x]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\n"
+_VALID = "models: [m]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\n"
 
 
 def _write(tmp_path, text: str) -> str:
@@ -39,7 +39,7 @@ def test_non_mapping_top_level_raises_clear_error(tmp_path):
         load_config(_write(tmp_path, "- just\n- a\n- list\n"))
 
 
-@pytest.mark.parametrize("missing", ["models", "suites", "attacks", "adapters", "seeds"])
+@pytest.mark.parametrize("missing", ["models", "attacks", "adapters", "seeds"])
 def test_missing_required_key_names_the_key(tmp_path, missing):
     lines = [ln for ln in _VALID.splitlines() if not ln.startswith(f"{missing}:")]
     with pytest.raises(ValueError, match=missing):

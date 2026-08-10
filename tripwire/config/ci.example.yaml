@@ -14,9 +14,6 @@
 models:
   - llama-3.3-70b-versatile
 
-suites:
-  - workspace
-
 adapters:
   - raw_loop
 

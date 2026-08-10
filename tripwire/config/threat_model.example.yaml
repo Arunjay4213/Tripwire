@@ -4,9 +4,6 @@
 models:
   - llama-3.3-70b-versatile   # via Groq (OpenAI-compatible)
 
-suites:
-  - workspace
-
 # Scenarios = the tasks the agent is attacked on (tripwire/scenarios.py). Each has
 # its own persona, task, tool, and AUTHORIZED recipient; a sweep runs every attack
 # against every listed scenario, so the agent is tested on varied realistic tasks

@@ -37,9 +37,6 @@ STARTER_CONFIG = """\
 models:
   - gpt-4o-mini
 
-suites:
-  - workspace
-
 # The agent(s) to test. Built-ins: raw_loop, langgraph, multi_agent.
 # Override them entirely with `tripwire --agent path/to/your_agent.py`.
 adapters:
