@@ -166,8 +166,14 @@ class Observation:
     final_reply: str = ""
 
 
-def observe(trace: NormalizedTrace, canary: str) -> Observation:
-    """Distill a trace into the attacker-visible feedback (canary redacted)."""
+def observe(
+    trace: NormalizedTrace, canary: str, authorized: frozenset[str] = AUTHORIZED_RECIPIENTS
+) -> Observation:
+    """Distill a trace into the attacker-visible feedback (canary redacted).
+
+    `authorized` is the scenario's authorized-recipient set, so exfiltration is
+    judged against the right destinations -- pass scenario.authorized_recipients
+    when driving a non-default scenario (see src/scenarios.py)."""
     tool_calls: list[tuple[str, dict]] = []
     blocked: list[str] = []
     for s in trace.steps:
@@ -180,7 +186,7 @@ def observe(trace: NormalizedTrace, canary: str) -> Observation:
     return Observation(
         grade=attack_grade(trace, canary),
         executed_send_email=executed,
-        exfiltrated=attack_exfiltrated(trace, canary),
+        exfiltrated=attack_exfiltrated(trace, canary, authorized),
         blocked_messages=blocked,
         tool_calls=tool_calls,
         final_reply=_redact(trace.final_output or "", canary),

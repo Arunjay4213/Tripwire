@@ -8,7 +8,10 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass
-from typing import Sequence
+from typing import TYPE_CHECKING, Sequence
+
+if TYPE_CHECKING:
+    from src.scenarios import Scenario
 
 from src.adapters.base import Adapter, EpisodeSpec
 from src.attacks.base import Attack
@@ -233,6 +236,43 @@ def run_tree_campaign(
         model=spec.model,
         attack=attacker.name,
         seed=spec.environment_seed,
+        broke=result.broke,
+        attempts_to_break=result.attempts_to_break,
+        budget=budget,
+        defense=defense.name,
+    )
+
+
+def run_scenario_tree_campaign(
+    adapter: Adapter,
+    scenario: "Scenario",
+    model: str,
+    attacker: TreeAttacker,
+    budget: int,
+    defense: Defense = NoDefense(),
+    seed: int = 0,
+) -> CampaignResult:
+    """Run a TAP-style tree-search campaign against a local AgentDojo-style
+    scenario (src/scenarios.py) instead of the built-in invoice episode.
+
+    Same contract as run_tree_campaign -- an `evaluate(payload) -> Observation`
+    callback the attacker drives -- but the episode comes from
+    `scenario.build_spec` and exfiltration is judged against the scenario's own
+    authorized recipients, so the attacker's success signal is correct for that
+    scenario. The canary is fixed by `seed` for the whole campaign (one session,
+    many payloads), exactly like the invoice path.
+    """
+    def evaluate(payload: str):
+        spec, canary = scenario.build_spec(defense, seed, model, payload)
+        trace = adapter.run(spec)
+        return observe(trace, canary, authorized=scenario.authorized_recipients)
+
+    result = attacker.search(evaluate, budget)
+    return CampaignResult(
+        adapter=adapter.name,
+        model=model,
+        attack=attacker.name,
+        seed=seed,
         broke=result.broke,
         attempts_to_break=result.attempts_to_break,
         budget=budget,
