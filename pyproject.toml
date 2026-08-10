@@ -3,7 +3,10 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "tripwire"
+# PyPI reserves the bare name "tripwire", so the distribution is "tripwire-eval".
+# The import package and the CLI command are still `tripwire` (like
+# scikit-learn -> import sklearn).
+name = "tripwire-eval"
 version = "0.1.0"
 description = "Measure how vulnerable your AI agent is to prompt-injection attacks, across frameworks and defenses."
 readme = "README.md"

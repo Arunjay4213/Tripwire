@@ -18,21 +18,23 @@ check.
 ## Install
 
 ```bash
-pip install tripwire          # or: uv pip install tripwire
+pip install tripwire-eval          # or: uv pip install tripwire-eval
 ```
+
+The install name is `tripwire-eval`; the import package and the CLI command are just `tripwire` (like `pip install scikit-learn` → `import sklearn`).
 
 Core install is small (an OpenAI-compatible client, LangGraph adapters). Opt into the heavier pieces:
 
 ```bash
-pip install "tripwire[agentdojo]"   # the real AgentDojo benchmark bridge
-pip install "tripwire[viz]"         # Pareto / analysis plots
-pip install "tripwire[all]"         # everything
+pip install "tripwire-eval[agentdojo]"   # the real AgentDojo benchmark bridge
+pip install "tripwire-eval[viz]"         # Pareto / analysis plots
+pip install "tripwire-eval[all]"         # everything
 ```
 
 Or run it without installing, via uv:
 
 ```bash
-uvx tripwire --config path/to/threat_model.yaml --smoke
+uvx --from tripwire-eval tripwire --config path/to/threat_model.yaml --smoke
 ```
 
 ## 60-second quickstart
