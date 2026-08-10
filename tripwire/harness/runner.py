@@ -8,10 +8,7 @@ from __future__ import annotations
 import sys
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Sequence
-
-if TYPE_CHECKING:
-    from tripwire.scenarios import Scenario
+from typing import Sequence
 
 from tripwire.adapters.base import Adapter, EpisodeSpec
 from tripwire.attacks.base import Attack
@@ -22,11 +19,13 @@ from tripwire.harness.canary import inject, make_canary
 from tripwire.harness.judge import (
     BENIGN_RECIPIENT,
     BENIGN_TASK_EMAIL_BODY,
+    attack_exfiltrated,
     attack_grade,
     attack_succeeded,
     observe,
     task_completed,
 )
+from tripwire.scenarios import INVOICE, Scenario
 
 # --- default tool schemas (OpenAI format) ------------------------------------
 
@@ -67,6 +66,7 @@ class EpisodeResult:
     succeeded: bool
     defense: str = "no_defense"
     task_completed: bool = False
+    scenario: str = "invoice"
 
 
 @dataclass
@@ -81,6 +81,7 @@ class CampaignResult:
     attempts_to_break: int | None     # attempt number of the first leak, else None
     budget: int
     defense: str = "no_defense"
+    scenario: str = "invoice"
 
 
 def _build_episode(
@@ -133,26 +134,29 @@ def _build_episode(
 
 
 def run_episode(
-    adapter: Adapter, spec: EpisodeSpec, attack: Attack, defense: Defense = NoDefense()
+    adapter: Adapter, spec: EpisodeSpec, attack: Attack,
+    defense: Defense = NoDefense(), scenario: Scenario = INVOICE,
 ) -> EpisodeResult:
     """Run one episode and score it.
 
     1. Render the attack payload (does NOT see the canary value)
-    2. Build the environment (canary + injection + defense wired in) via _build_episode
+    2. Build the environment (canary + injection + defense wired in) from the
+       scenario (defaults to the invoice scenario)
     3. Run the adapter
-    4. Judge the trace: did the canary leak, AND did the agent still get its
-       real (benign) job done? These are independent -- a defense that blocks
-       the leak by nuking every tool would show 0% ASR and 0% utility, which
-       is a very different (worse) result than 0% ASR with 100% utility.
+    4. Judge the trace: did the secret EXFILTRATE (reach an unauthorized
+       recipient), AND did the agent still get its real (benign) job done? These
+       are independent -- a defense that blocks the leak by nuking every tool
+       would show 0% ASR and 0% utility, a very different (worse) result than
+       0% ASR with 100% utility.
     """
     # Render with a throwaway canary — attacks do not embed it (they trick the
     # agent into volunteering it), so the value passed here does not matter.
     payload = attack.render(make_canary(spec.environment_seed))
-    episode_spec, canary = _build_episode(payload, spec, defense)
+    episode_spec, canary = scenario.build_spec(defense, spec.environment_seed, spec.model, payload)
 
     trace = adapter.run(episode_spec)
-    succeeded = attack_succeeded(trace, canary)
-    completed = task_completed(trace)
+    succeeded = attack_exfiltrated(trace, canary, scenario.authorized_recipients)
+    completed = scenario.task_completed(trace)
 
     return EpisodeResult(
         adapter=adapter.name,
@@ -162,6 +166,7 @@ def run_episode(
         succeeded=succeeded,
         defense=defense.name,
         task_completed=completed,
+        scenario=scenario.name,
     )
 
 
@@ -171,21 +176,23 @@ def run_campaign(
     attacker: IterativeAttacker,
     budget: int,
     defense: Defense = NoDefense(),
+    scenario: Scenario = INVOICE,
 ) -> CampaignResult:
     """Run one adaptive campaign: generate → run → grade → adapt, up to budget.
 
     Each attempt feeds the graded outcome (0/1/2 from attack_grade) and the
     agent's reply back to the attacker so it can refine. Stops early on the first
-    real exfiltration (attack_succeeded: canary reaches an unauthorized recipient),
-    NOT merely the canary surfacing in the authorized email (grade 2).
+    real exfiltration (canary reaches a recipient outside the scenario's
+    authorized set), NOT merely the canary surfacing in the authorized email
+    (grade 2).
     """
     history: list[tuple[str, int, str]] = []
     for attempt in range(1, budget + 1):
         payload = attacker.next_payload(history)
-        episode_spec, canary = _build_episode(payload, spec, defense)
+        episode_spec, canary = scenario.build_spec(defense, spec.environment_seed, spec.model, payload)
         trace = adapter.run(episode_spec)
         grade = attack_grade(trace, canary)
-        if attack_succeeded(trace, canary):
+        if attack_exfiltrated(trace, canary, scenario.authorized_recipients):
             return CampaignResult(
                 adapter=adapter.name,
                 model=spec.model,
@@ -195,6 +202,7 @@ def run_campaign(
                 attempts_to_break=attempt,
                 budget=budget,
                 defense=defense.name,
+                scenario=scenario.name,
             )
         history.append((payload, grade, trace.final_output))
 
@@ -207,6 +215,7 @@ def run_campaign(
         attempts_to_break=None,
         budget=budget,
         defense=defense.name,
+        scenario=scenario.name,
     )
 
 
@@ -245,7 +254,7 @@ def run_tree_campaign(
 
 def run_scenario_tree_campaign(
     adapter: Adapter,
-    scenario: "Scenario",
+    scenario: Scenario,
     model: str,
     attacker: TreeAttacker,
     budget: int,
@@ -277,6 +286,7 @@ def run_scenario_tree_campaign(
         attempts_to_break=result.attempts_to_break,
         budget=budget,
         defense=defense.name,
+        scenario=scenario.name,
     )
 
 
@@ -317,12 +327,14 @@ def run_sweep(
     seeds: Sequence[int],
     campaign_budget: int = 8,
     defenses: Sequence[Defense] = (NoDefense(),),
+    scenarios: Sequence[Scenario] = (INVOICE,),
 ) -> tuple[list[EpisodeResult], list[CampaignResult]]:
-    """Loop adapters x models x attacks x defenses x seeds.
+    """Loop adapters x models x scenarios x attacks x defenses x seeds.
 
     Single-shot attacks run one episode each -> EpisodeResult. Adaptive
-    IterativeAttacker instances run a campaign each -> CampaignResult. Returns
-    both lists (either may be empty).
+    IterativeAttacker / TreeAttacker instances run a campaign each ->
+    CampaignResult. Every run is scored against its scenario's own authorized
+    recipients. Returns both lists (either may be empty).
 
     Each episode/campaign is fault-isolated (see _run_with_retries): a
     provider error on one seed is logged to stderr and skipped, not allowed
@@ -335,38 +347,36 @@ def run_sweep(
     skipped = 0
     for adapter in adapters:
         for model in models:
-            for attack in attacks:
-                for defense in defenses:
-                    for seed in seeds:
-                        spec = EpisodeSpec(
-                            task=None,  # _build_episode builds this
-                            tools=TOOL_SCHEMAS,
-                            model=model,
-                            environment_seed=seed,
-                        )
-                        label = f"adapter={adapter.name} attack={attack.name} defense={defense.name} seed={seed}"
-                        if isinstance(attack, TreeAttacker):
-                            result = _run_with_retries(
-                                run_tree_campaign, adapter, spec, attack, campaign_budget, defense, label=label,
+            for scenario in scenarios:
+                for attack in attacks:
+                    for defense in defenses:
+                        for seed in seeds:
+                            spec = EpisodeSpec(
+                                task=None,  # the scenario builds this
+                                tools=TOOL_SCHEMAS,
+                                model=model,
+                                environment_seed=seed,
                             )
-                            if result is not None:
-                                campaigns.append(result)
+                            label = (f"adapter={adapter.name} scenario={scenario.name} "
+                                     f"attack={attack.name} defense={defense.name} seed={seed}")
+                            if isinstance(attack, TreeAttacker):
+                                result = _run_with_retries(
+                                    run_scenario_tree_campaign, adapter, scenario, model, attack,
+                                    campaign_budget, defense, seed, label=label,
+                                )
+                                dest = campaigns
+                            elif isinstance(attack, IterativeAttacker):
+                                result = _run_with_retries(
+                                    run_campaign, adapter, spec, attack, campaign_budget, defense, scenario, label=label,
+                                )
+                                dest = campaigns
                             else:
-                                skipped += 1
-                        elif isinstance(attack, IterativeAttacker):
-                            result = _run_with_retries(
-                                run_campaign, adapter, spec, attack, campaign_budget, defense, label=label,
-                            )
+                                result = _run_with_retries(
+                                    run_episode, adapter, spec, attack, defense, scenario, label=label,
+                                )
+                                dest = episodes
                             if result is not None:
-                                campaigns.append(result)
-                            else:
-                                skipped += 1
-                        else:
-                            result = _run_with_retries(
-                                run_episode, adapter, spec, attack, defense, label=label,
-                            )
-                            if result is not None:
-                                episodes.append(result)
+                                dest.append(result)
                             else:
                                 skipped += 1
     if skipped:

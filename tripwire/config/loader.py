@@ -31,6 +31,7 @@ from tripwire.defenses.outbound_guard import OutboundGuard
 from tripwire.defenses.prompt_hardening import PromptHardening
 from tripwire.defenses.spotlighting import Spotlighting
 from tripwire.defenses.tool_filter import ToolFilter
+from tripwire.scenarios import SCENARIOS, Scenario
 
 # Registry of zero-argument defenses: name -> class, instantiated with cls().
 # tool_filter (needs allowed_tools) is handled separately in resolve_defenses.
@@ -67,6 +68,7 @@ class TripwireConfig:
     adapters: list[Adapter]
     defenses: list[Defense]
     seeds: list[int]
+    scenarios: list[Scenario] = field(default_factory=lambda: [SCENARIOS["invoice"]])
     allowed_tools: list[str] = field(default_factory=list)
     max_tokens_per_run: int | None = None
     smoke: bool = False
@@ -88,6 +90,7 @@ def load_config(path: str) -> TripwireConfig:
         adapters=resolve_adapters(raw["adapters"]),
         defenses=resolve_defenses(raw.get("defenses", [None]), allowed_tools),
         seeds=raw["seeds"],
+        scenarios=resolve_scenarios(raw.get("scenarios", ["invoice"])),
         allowed_tools=allowed_tools,
         max_tokens_per_run=limits.get("max_tokens_per_run"),
         smoke=limits.get("smoke", False),
@@ -105,6 +108,24 @@ def resolve_attacks(names: list[str]) -> list[Attack]:
             raise ValueError(f"Unknown attack {name!r}. Known: {known}")
         attacks.append(cls())
     return attacks
+
+
+def resolve_scenarios(names: list[str]) -> list[Scenario]:
+    """Map scenario name strings to Scenario instances. Raise on unknown.
+
+    Scenarios (tripwire/scenarios.py) are the tasks the agent is attacked on --
+    invoice (default), helpdesk, calendar, expense. A sweep runs every attack
+    against every listed scenario, so the agent is tested on varied tasks, each
+    with its own authorized recipient.
+    """
+    scenarios: list[Scenario] = []
+    for name in names:
+        s = SCENARIOS.get(name)
+        if s is None:
+            known = ", ".join(sorted(SCENARIOS))
+            raise ValueError(f"Unknown scenario {name!r}. Known: {known}")
+        scenarios.append(s)
+    return scenarios
 
 
 def resolve_defenses(names: list[str | None], allowed_tools: list[str]) -> list[Defense]:

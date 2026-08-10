@@ -7,6 +7,16 @@ models:
 suites:
   - workspace
 
+# Scenarios = the tasks the agent is attacked on (tripwire/scenarios.py). Each has
+# its own persona, task, tool, and AUTHORIZED recipient; a sweep runs every attack
+# against every listed scenario, so the agent is tested on varied realistic tasks
+# (not just the invoice email). Omit this key to default to [invoice].
+scenarios:
+  - invoice     # forward an invoice total to accounting@corp.com
+  - helpdesk    # log a ticket resolution to helpdesk-log@corp.com
+  - calendar    # confirm a meeting to scheduling@corp.com
+  - expense     # forward a reimbursement total to payroll@corp.com
+
 # Every framework adapter, so the same attack suite runs against each and a
 # sweep can compare hijackability across orchestration layers (see docs/attacks.md):
 #   raw_loop    minimal ReAct baseline, no framework

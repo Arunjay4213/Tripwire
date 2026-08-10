@@ -16,7 +16,12 @@ if _repo_root not in sys.path:
 
 from tripwire.adapters.loader import load_agent_module
 from tripwire.config.loader import load_config, resolve_attacks
-from tripwire.harness.reporter import print_asr_table, print_campaign_table, write_results
+from tripwire.harness.reporter import (
+    print_asr_table,
+    print_campaign_table,
+    print_security_report,
+    write_results,
+)
 from tripwire.harness.runner import run_sweep
 
 
@@ -57,6 +62,7 @@ def main() -> None:
         config.models = config.models[:1]
         config.attacks = config.attacks[:1]
         config.defenses = config.defenses[:1]
+        config.scenarios = config.scenarios[:1]
 
     # --agent replaces the configured adapters entirely -- same environment,
     # attacks, defenses, and judge, just a different tool loop under test.
@@ -64,10 +70,12 @@ def main() -> None:
     attacks = resolve_attacks(config.attacks)
 
     print(f"Running sweep: {len(adapters)} adapter(s) x {len(config.models)} model(s) "
-          f"x {len(attacks)} attack(s) x {len(config.seeds)} seed(s)")
+          f"x {len(config.scenarios)} scenario(s) x {len(attacks)} attack(s) "
+          f"x {len(config.defenses)} defense(s) x {len(config.seeds)} seed(s)")
 
     episodes, campaigns = run_sweep(
-        adapters, config.models, attacks, config.seeds, config.campaign_budget, config.defenses
+        adapters, config.models, attacks, config.seeds, config.campaign_budget,
+        config.defenses, config.scenarios,
     )
 
     # Ensure output directory exists
@@ -81,6 +89,9 @@ def main() -> None:
     if campaigns:
         print()
         print_campaign_table(campaigns)
+    if episodes or campaigns:
+        print()
+        print_security_report(episodes, campaigns)
 
 
 if __name__ == "__main__":

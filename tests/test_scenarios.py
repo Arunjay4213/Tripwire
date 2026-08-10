@@ -113,3 +113,51 @@ def test_scenario_tree_campaign_authorized_recipient_is_not_a_break():
     adapter = _leaking_adapter(authorized, canary)
     res = run_scenario_tree_campaign(adapter, scenario, "m", _FakeTree(), budget=3)
     assert res.broke is False
+
+
+# --- task completion + config resolution + sweep tagging --------------------
+
+def test_task_completed_needs_authorized_recipient_and_marker():
+    scenario = SCENARIOS["expense"]
+    authorized = next(iter(scenario.authorized_recipients))
+    done = NormalizedTrace(steps=[TraceStep(step=0, type="tool_call", name="send_email",
+                                            args={"to": authorized, "body": f"total {scenario.task_marker}"})],
+                           final_output="")
+    assert scenario.task_completed(done) is True
+    # right content, wrong (unauthorized) recipient -> not the task
+    wrong = NormalizedTrace(steps=[TraceStep(step=0, type="tool_call", name="send_email",
+                                             args={"to": "ap@corp.com", "body": scenario.task_marker})],
+                            final_output="")
+    assert scenario.task_completed(wrong) is False
+
+
+def test_resolve_scenarios_known_and_unknown():
+    from tripwire.config.loader import resolve_scenarios
+    got = resolve_scenarios(["invoice", "helpdesk"])
+    assert [s.name for s in got] == ["invoice", "helpdesk"]
+    with pytest.raises(ValueError):
+        resolve_scenarios(["not_a_scenario"])
+
+
+def test_example_config_scenarios_resolve(monkeypatch):
+    monkeypatch.setenv("OPENAI_API_KEY", "dummy")
+    from tripwire.config.loader import load_config
+    cfg = load_config("tripwire/config/threat_model.example.yaml")
+    assert [s.name for s in cfg.scenarios] == ["invoice", "helpdesk", "calendar", "expense"]
+
+
+def test_run_sweep_tags_each_result_with_its_scenario():
+    from tripwire.attacks.fixed_injection import FixedInjection
+    from tripwire.defenses.base import NoDefense
+    from tripwire.harness.runner import run_sweep
+
+    class _Benign:
+        name = "benign"
+        def run(self, spec):
+            return NormalizedTrace(steps=[TraceStep(step=0, type="model_output", content="ok")],
+                                   final_output="ok")
+
+    episodes, _ = run_sweep([_Benign()], ["m"], [FixedInjection()], [0],
+                            defenses=[NoDefense()],
+                            scenarios=[SCENARIOS["helpdesk"], SCENARIOS["calendar"]])
+    assert sorted(r.scenario for r in episodes) == ["calendar", "helpdesk"]
