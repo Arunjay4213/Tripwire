@@ -131,23 +131,31 @@ def main() -> None:
               file=sys.stderr)
         sys.exit(1)
 
-    config = load_config(args.config)
+    # Config loading, agent loading, and attack resolution all raise ValueError
+    # (or FileNotFoundError) with actionable messages for the mistakes a new
+    # user makes -- a bad config key, an unknown adapter/attack name, a missing
+    # --agent file. Turn those into a clean one-line error, not a traceback.
+    try:
+        config = load_config(args.config)
 
-    if args.smoke:
-        config.smoke = True
+        if args.smoke:
+            config.smoke = True
 
-    # Apply smoke overrides
-    if config.smoke:
-        config.seeds = [config.seeds[0]] if config.seeds else [0]
-        config.models = config.models[:1]
-        config.attacks = config.attacks[:1]
-        config.defenses = config.defenses[:1]
-        config.scenarios = config.scenarios[:1]
+        # Apply smoke overrides
+        if config.smoke:
+            config.seeds = [config.seeds[0]] if config.seeds else [0]
+            config.models = config.models[:1]
+            config.attacks = config.attacks[:1]
+            config.defenses = config.defenses[:1]
+            config.scenarios = config.scenarios[:1]
 
-    # --agent replaces the configured adapters entirely -- same environment,
-    # attacks, defenses, and judge, just a different tool loop under test.
-    adapters = [load_agent_module(args.agent)] if args.agent else config.adapters
-    attacks = resolve_attacks(config.attacks)
+        # --agent replaces the configured adapters entirely -- same environment,
+        # attacks, defenses, and judge, just a different tool loop under test.
+        adapters = [load_agent_module(args.agent)] if args.agent else config.adapters
+        attacks = resolve_attacks(config.attacks)
+    except (ValueError, FileNotFoundError) as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
 
     print(f"Running sweep: {len(adapters)} adapter(s) x {len(config.models)} model(s) "
           f"x {len(config.scenarios)} scenario(s) x {len(attacks)} attack(s) "

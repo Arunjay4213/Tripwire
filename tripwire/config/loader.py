@@ -75,10 +75,35 @@ class TripwireConfig:
     campaign_budget: int = 8
 
 
+# Keys the config must define. Validated up front so a typo or omission yields a
+# clear message instead of a bare KeyError deep in construction.
+_REQUIRED_KEYS = ("models", "suites", "attacks", "adapters", "seeds")
+
+
 def load_config(path: str) -> TripwireConfig:
-    """Read YAML config, validate required keys, return dataclass."""
-    with open(path) as f:
-        raw = yaml.safe_load(f)
+    """Read YAML config, validate required keys, return dataclass.
+
+    Raises ValueError with an actionable message (which the CLI turns into a
+    clean error, not a traceback) for the mistakes a new user actually makes:
+    a missing file, an empty/comment-only file, a non-mapping top level, or a
+    missing required key.
+    """
+    try:
+        with open(path) as f:
+            raw = yaml.safe_load(f)
+    except FileNotFoundError:
+        raise ValueError(f"Config file not found: {path} (run `tripwire init` to create one)")
+
+    if raw is None:
+        raise ValueError(f"Config file is empty (or only comments): {path}")
+    if not isinstance(raw, dict):
+        raise ValueError(
+            f"Config file must be a YAML mapping of keys to values, got {type(raw).__name__}: {path}"
+        )
+
+    for key in _REQUIRED_KEYS:
+        if key not in raw:
+            raise ValueError(f"Config missing required key: {key!r} (in {path})")
 
     limits = raw.get("limits", {}) or {}
     allowed_tools = raw.get("allowed_tools", [])
