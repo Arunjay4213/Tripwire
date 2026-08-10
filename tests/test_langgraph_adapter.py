@@ -170,6 +170,62 @@ def test_allowed_call_executes_normally_with_guard_present():
     assert trace.steps[1].content == "echo: hi"
 
 
+def test_hallucinated_tool_is_blocked_not_crashed():
+    """A model can free-form a tool name the agent was never given (e.g. a
+    defense filtered it out). That must produce a tool_blocked step, not a
+    KeyError -- matching MultiAgentAdapter's handling."""
+    adapter = LangGraphAdapter()
+    adapter.client.chat.completions.create = MagicMock(
+        side_effect=[
+            _fake_response(
+                content=None,
+                tool_calls=[_fake_tool_call("call_1", "ghost_tool", '{"msg": "hi"}')],
+            ),
+            _fake_response(content="done", tool_calls=None),
+        ]
+    )
+
+    spec = EpisodeSpec(
+        task={
+            "system_prompt": "You are a test agent.",
+            "user_message": "Do something.",
+            "tool_impls": {"echo": _echo},  # ghost_tool is NOT here
+        },
+        tools=[ECHO_SCHEMA],
+        model="fake-model",
+        environment_seed=0,
+    )
+
+    trace = adapter.run(spec)  # must not raise
+
+    blocked = trace.steps[1]
+    assert blocked.type == "tool_blocked"
+    assert "not available" in blocked.content
+
+
+def test_empty_tool_list_omits_tools_kwarg():
+    """A tool_filter defense can strip every tool. Sending tools=[] makes most
+    OpenAI-compatible endpoints 400, so the adapter must omit the kwarg."""
+    adapter = LangGraphAdapter()
+    create = MagicMock(return_value=_fake_response(content="text only", tool_calls=None))
+    adapter.client.chat.completions.create = create
+
+    spec = EpisodeSpec(
+        task={
+            "system_prompt": "You are a test agent.",
+            "user_message": "Say something.",
+            "tool_impls": {},
+        },
+        tools=[],
+        model="fake-model",
+        environment_seed=0,
+    )
+
+    adapter.run(spec)
+
+    assert "tools" not in create.call_args.kwargs
+
+
 def test_run_with_no_tool_calls_returns_single_model_output_step():
     adapter = LangGraphAdapter()
     adapter.client.chat.completions.create = MagicMock(

@@ -80,9 +80,13 @@ class MultiAgentAdapter:
 
     def _call_model(self, messages: list, model: str, tools_json: list[dict]) -> dict:
         openai_messages = convert_to_openai_messages(messages)
-        response = self.client.chat.completions.create(
-            model=model, messages=openai_messages, tools=tools_json,
-        )
+        # Omit `tools` when empty: a tool_filter defense can leave an agent with
+        # no tools (e.g. Agent B without send_email), and most endpoints reject
+        # `tools=[]` with a 400. No tools -> the agent can only reply text.
+        kwargs = {"model": model, "messages": openai_messages}
+        if tools_json:
+            kwargs["tools"] = tools_json
+        response = self.client.chat.completions.create(**kwargs)
         return openai_message_to_dict(response.choices[0].message)
 
     def _run_tools(self, last_message: Any, tool_map: dict, tool_call_guard, tool_result_wrapper) -> list[dict]:

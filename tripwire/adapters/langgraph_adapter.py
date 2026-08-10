@@ -41,11 +41,13 @@ class LangGraphAdapter:
         The response gets added to state.messages automatically.
         """
         openai_messages = convert_to_openai_messages(state["messages"])
-        response = self.client.chat.completions.create(
-            model=model,
-            messages=openai_messages,
-            tools=tools_json,
-        )
+        # Omit `tools` entirely when the list is empty -- a defense (tool_filter)
+        # can strip every tool, and most OpenAI-compatible endpoints reject an
+        # empty `tools=[]` with a 400. No tools -> the model can only reply text.
+        kwargs = {"model": model, "messages": openai_messages}
+        if tools_json:
+            kwargs["tools"] = tools_json
+        response = self.client.chat.completions.create(**kwargs)
         # Return a plain OpenAI-format dict, not the raw SDK object -- the
         # add_messages reducer only knows how to coerce BaseMessage / dict /
         # (role, content) tuples (see AgentState docstring above).
@@ -69,7 +71,13 @@ class LangGraphAdapter:
             # (filtered out of spec.tools), the model can still free-form a
             # call for it, so check again right before executing.
             blocked = False
-            if tool_call_guard is not None:
+            if name not in tool_map:
+                # Topology, not a defense decision: this agent was never given
+                # this tool (e.g. a defense filtered it out, or the model
+                # hallucinated a name). Report it as unavailable instead of
+                # crashing on tool_map[name]. Mirrors MultiAgentAdapter.
+                result, blocked = f"Tool '{name}' is not available to this agent.", True
+            elif tool_call_guard is not None:
                 allowed, message = tool_call_guard(name, args)
                 if not allowed:
                     result, blocked = message, True

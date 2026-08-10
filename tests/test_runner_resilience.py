@@ -81,6 +81,18 @@ def test_skipped_run_prints_warning_to_stderr(capsys):
     assert "seed=0" in err
 
 
+def test_skip_message_includes_full_traceback(capsys):
+    """On final give-up the full traceback is printed, not just the exception
+    type -- so a real bug in a user's --agent adapter is debuggable instead of
+    reading as a vague 'provider error'."""
+    adapter = _FlakyAdapter(fail_seeds={0})
+    run_sweep([adapter], ["m"], [_FixedAttack()], [0])
+    err = capsys.readouterr().err
+    assert "Traceback (most recent call last)" in err
+    assert "RuntimeError: simulated permanent provider error" in err
+    assert 'raise RuntimeError' in err  # a source line from the traceback
+
+
 def test_all_seeds_succeeding_produces_no_warning(capsys):
     adapter = _FlakyAdapter()
     run_sweep([adapter], ["m"], [_FixedAttack()], [0, 1, 2])

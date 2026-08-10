@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import sys
 import time
+import traceback
 from dataclasses import dataclass
 from typing import Sequence
 
@@ -332,9 +333,13 @@ def _run_with_retries(fn, *args, label: str, **kwargs):
             last_err = e
             if attempt < _MAX_EPISODE_RETRIES:
                 time.sleep(1.5 * (attempt + 1))
+    # Print the full traceback, not just the type/message: a broad catch keeps
+    # one bad episode from aborting a long sweep, but the same net would silently
+    # bury a real bug in a user's --agent adapter as "provider errors". The
+    # traceback makes such bugs debuggable while preserving sweep resilience.
     print(
-        f"[run_sweep] skipping {label} after {_MAX_EPISODE_RETRIES + 1} attempts: "
-        f"{type(last_err).__name__}: {last_err}",
+        f"[run_sweep] skipping {label} after {_MAX_EPISODE_RETRIES + 1} attempts:\n"
+        + "".join(traceback.format_exception(last_err)),
         file=sys.stderr,
     )
     return None

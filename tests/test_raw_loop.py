@@ -230,3 +230,17 @@ class TestMaxIterations:
         assert trace.final_output == ""
         # 2 iterations × 1 tool_call each = 2 tool_calls + 2 tool_results = 4 steps
         assert len(trace.steps) == 4
+
+
+def test_empty_tool_list_omits_tools_kwarg():
+    """A tool_filter defense can strip every tool. Sending tools=[] makes most
+    OpenAI-compatible endpoints 400, so the adapter must omit the kwarg."""
+    client = MagicMock()
+    client.chat.completions.create.return_value = _make_response(
+        _make_message(content="text only")
+    )
+
+    adapter = RawLoopAdapter(client)
+    adapter.run(_spec())  # _spec() uses tools=[]
+
+    assert "tools" not in client.chat.completions.create.call_args.kwargs

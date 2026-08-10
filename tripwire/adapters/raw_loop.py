@@ -48,11 +48,13 @@ class RawLoopAdapter:
         step_idx = 0
 
         for _ in range(self._max_iterations):
-            response = self._client.chat.completions.create(
-                model=spec.model,
-                messages=messages,
-                tools=spec.tools,
-            )
+            # Omit `tools` when empty: a tool_filter defense can strip every
+            # tool, and most OpenAI-compatible endpoints reject `tools=[]` with
+            # a 400. No tools -> the model can only produce a text reply.
+            kwargs = {"model": spec.model, "messages": messages}
+            if spec.tools:
+                kwargs["tools"] = spec.tools
+            response = self._client.chat.completions.create(**kwargs)
             msg = response.choices[0].message
 
             if not msg.tool_calls:
