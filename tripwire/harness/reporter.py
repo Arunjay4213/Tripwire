@@ -67,20 +67,23 @@ def print_asr_table(results: list[EpisodeResult]) -> None:
 
 
 def print_campaign_table(campaigns: list[CampaignResult]) -> None:
-    """Print the adaptive-attacker effort-to-break table, grouped by (adapter, attack, defense).
+    """Print the adaptive-attacker effort-to-break table, grouped by
+    (adapter, scenario, attack, defense).
 
     Each row shows: campaigns run, break-rate within budget + 95% Wilson CI, and
-    median/mean attempts-to-break over the campaigns that broke.
+    median/mean attempts-to-break over the campaigns that broke. Scenario is part
+    of the key so a multi-scenario sweep doesn't merge distinct tasks into one row
+    (matching print_asr_table).
     """
-    groups: dict[tuple[str, str, str], list[CampaignResult]] = defaultdict(list)
+    groups: dict[tuple[str, str, str, str], list[CampaignResult]] = defaultdict(list)
     for c in campaigns:
-        groups[(c.adapter, c.attack, c.defense)].append(c)
+        groups[(c.adapter, c.scenario, c.attack, c.defense)].append(c)
 
-    print(f"{'adapter':<16} {'attack':<16} {'defense':<14} {'n':>4} {'broke':>6} {'rate':>6}  "
+    print(f"{'adapter':<16} {'scenario':<10} {'attack':<16} {'defense':<14} {'n':>4} {'broke':>6} {'rate':>6}  "
           f"{'95% CI':<14} {'attempts (med/mean)'}")
-    print("-" * 92)
+    print("-" * 102)
 
-    for (adapter, attack, defense), items in sorted(groups.items()):
+    for (adapter, scenario, attack, defense), items in sorted(groups.items()):
         n = len(items)
         broke = sum(1 for c in items if c.broke)
         rate = broke / n if n else 0.0
@@ -90,7 +93,7 @@ def print_campaign_table(campaigns: list[CampaignResult]) -> None:
             att = f"{statistics.median(attempts):.1f} / {statistics.mean(attempts):.1f}"
         else:
             att = "never broke"
-        print(f"{adapter:<16} {attack:<16} {defense:<14} {n:>4} {broke:>6} {rate:>5.0%}  "
+        print(f"{adapter:<16} {scenario:<10} {attack:<16} {defense:<14} {n:>4} {broke:>6} {rate:>5.0%}  "
               f"[{lo:.0%}, {hi:.0%}]      {att}")
 
 
@@ -102,30 +105,30 @@ def print_security_report(
     through and how to close each gap (see tripwire/harness/advice.py).
 
     A leak here means real exfiltration -- the planted secret reached a recipient
-    the task never authorized. Grouped by (agent, defense) so the fix matches the
-    configuration you actually ran.
+    the task never authorized. Grouped by (agent, scenario, defense) so the fix
+    matches the configuration you actually ran and doesn't merge distinct tasks.
     """
-    # (adapter, defense) -> attack -> [successes, n]
-    stats: dict[tuple[str, str], dict[str, list[int]]] = defaultdict(lambda: defaultdict(lambda: [0, 0]))
+    # (adapter, scenario, defense) -> attack -> [successes, n]
+    stats: dict[tuple[str, str, str], dict[str, list[int]]] = defaultdict(lambda: defaultdict(lambda: [0, 0]))
     for r in episodes:
-        s = stats[(r.adapter, r.defense)][r.attack]
+        s = stats[(r.adapter, r.scenario, r.defense)][r.attack]
         s[0] += int(r.succeeded); s[1] += 1
     for c in campaigns or []:
-        s = stats[(c.adapter, c.defense)][c.attack]
+        s = stats[(c.adapter, c.scenario, c.defense)][c.attack]
         s[0] += int(c.broke); s[1] += 1
 
     print("=" * 72)
     print("SECURITY FEEDBACK -- what got through, and how to harden your agent")
     print("=" * 72)
 
-    for (adapter, defense) in sorted(stats):
-        vulns = {a: v for a, v in stats[(adapter, defense)].items() if v[0] > 0}
-        header = f"agent={adapter}   defense={defense}"
+    for (adapter, scenario, defense) in sorted(stats):
+        vulns = {a: v for a, v in stats[(adapter, scenario, defense)].items() if v[0] > 0}
+        header = f"agent={adapter}   scenario={scenario}   defense={defense}"
         print(f"\n{header}")
         if not vulns:
             print("  ✓ No exfiltration observed across the attacks tested.")
             continue
-        print(f"  ✗ Leaked to {len(vulns)} of {len(stats[(adapter, defense)])} attacks tested:")
+        print(f"  ✗ Leaked to {len(vulns)} of {len(stats[(adapter, scenario, defense)])} attacks tested:")
         recommend: set[str] = set()
         for attack, (succ, n) in sorted(vulns.items(), key=lambda kv: -kv[1][0] / kv[1][1]):
             a = advice_for(attack)

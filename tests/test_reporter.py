@@ -4,8 +4,13 @@ import json
 import os
 import tempfile
 
-from tripwire.harness.reporter import print_asr_table, write_results
-from tripwire.harness.runner import EpisodeResult
+from tripwire.harness.reporter import (
+    print_asr_table,
+    print_campaign_table,
+    print_security_report,
+    write_results,
+)
+from tripwire.harness.runner import CampaignResult, EpisodeResult
 
 
 def _results():
@@ -59,3 +64,45 @@ def test_print_asr_table_empty(capsys):
     print_asr_table([])
     captured = capsys.readouterr()
     assert "adapter" in captured.out
+
+
+def test_asr_table_splits_by_scenario(capsys):
+    """Same adapter/attack/defense but different scenarios must not merge."""
+    results = [
+        EpisodeResult(adapter="raw_loop", model="m", attack="fixed", seed=0,
+                      succeeded=True, scenario="invoice"),
+        EpisodeResult(adapter="raw_loop", model="m", attack="fixed", seed=0,
+                      succeeded=False, scenario="helpdesk"),
+    ]
+    print_asr_table(results)
+    out = capsys.readouterr().out
+    assert "invoice" in out and "helpdesk" in out
+
+
+def test_campaign_table_runs_and_splits_by_scenario(capsys):
+    """print_campaign_table renders, and keeps scenarios in separate rows."""
+    campaigns = [
+        CampaignResult(adapter="raw_loop", model="m", attack="iterative", seed=0,
+                       broke=True, attempts_to_break=2, budget=8, scenario="invoice"),
+        CampaignResult(adapter="raw_loop", model="m", attack="iterative", seed=0,
+                       broke=False, attempts_to_break=None, budget=8, scenario="calendar"),
+    ]
+    print_campaign_table(campaigns)
+    out = capsys.readouterr().out
+    assert "iterative" in out
+    assert "invoice" in out and "calendar" in out
+
+
+def test_security_report_splits_by_scenario(capsys):
+    """The security report groups by (agent, scenario, defense), so the same
+    agent+defense on two scenarios yields two separate blocks."""
+    episodes = [
+        EpisodeResult(adapter="raw_loop", model="m", attack="metadata_exfil", seed=0,
+                      succeeded=True, defense="no_defense", scenario="invoice"),
+        EpisodeResult(adapter="raw_loop", model="m", attack="metadata_exfil", seed=0,
+                      succeeded=False, defense="no_defense", scenario="expense"),
+    ]
+    print_security_report(episodes)
+    out = capsys.readouterr().out
+    assert "scenario=invoice" in out
+    assert "scenario=expense" in out
