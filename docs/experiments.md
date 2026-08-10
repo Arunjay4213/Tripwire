@@ -1,5 +1,8 @@
 # Experiments
 
+> For the current headline results on `claude-haiku-4-5` (attack vs defense, scenarios, AgentDojo), see `docs/findings.md`.
+> This doc is the earlier `llama-3.3-70b` adapter-comparison data - a different question, kept as a historical record.
+
 Real results from running the harness at a scale beyond single-seed smoke
 tests. Recorded here — not just in a local `results/` directory — because
 raw per-seed JSON is regenerable but a specific real run, with its caveats,
