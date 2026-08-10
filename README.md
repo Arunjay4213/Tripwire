@@ -1,5 +1,10 @@
 # tripwire
 
+[![PyPI](https://img.shields.io/pypi/v/tripwire-eval.svg)](https://pypi.org/project/tripwire-eval/)
+[![Python](https://img.shields.io/pypi/pyversions/tripwire-eval.svg)](https://pypi.org/project/tripwire-eval/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/Arunjay4213/Tripwire/actions/workflows/asr-gate.yml/badge.svg)](https://github.com/Arunjay4213/Tripwire/actions/workflows/asr-gate.yml)
+
 **A red-teaming harness for tool-using AI agents.** Point it at an agent —
 yours, or one of the built-in reference implementations — hit it with prompt
 injection attacks, and get a deterministic, no-human-judgment answer: did it

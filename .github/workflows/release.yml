@@ -1,0 +1,39 @@
+name: release
+
+# Publish tripwire-eval to PyPI when a version tag (vX.Y.Z) is pushed.
+#
+# Auth uses PyPI Trusted Publishing (OIDC) -- no API token is stored in the repo.
+# One-time setup on PyPI (do this once): the project page for `tripwire-eval` ->
+# Settings -> Publishing -> "Add a new publisher" (GitHub):
+#     Owner:        Arunjay4213
+#     Repository:   Tripwire
+#     Workflow:     release.yml
+#     Environment:  (leave blank)
+# After that, cutting a release is: bump `version` in pyproject.toml, then
+#     git tag v0.1.1 && git push --tags
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write        # required for PyPI Trusted Publishing (OIDC)
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+
+      - name: Verify the tag matches the package version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg=$(grep -E '^version = ' pyproject.toml | head -1 | sed -E 's/version = "([^"]+)"/\1/')
+          echo "tag=$tag  pyproject=$pkg"
+          test "$tag" = "$pkg" || { echo "::error::tag v$tag does not match pyproject version $pkg"; exit 1; }
+
+      - name: Build
+        run: uv build
+
+      - name: Publish to PyPI (Trusted Publishing)
+        run: uv publish --trusted-publishing always

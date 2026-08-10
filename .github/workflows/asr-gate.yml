@@ -11,7 +11,7 @@ on:
     inputs:
       config:
         description: "Path to the threat_model config to sweep"
-        default: "src/config/ci.example.yaml"
+        default: "tripwire/config/ci.example.yaml"
       threshold:
         description: "Max allowed ASR (fraction 0-1); build fails above this"
         default: "0.5"
@@ -70,8 +70,8 @@ jobs:
       - name: Run smoke attack sweep
         if: steps.key.outputs.present == 'true'
         run: |
-          python -m src \
-            --config "${{ github.event.inputs.config || 'src/config/ci.example.yaml' }}" \
+          python -m tripwire \
+            --config "${{ github.event.inputs.config || 'tripwire/config/ci.example.yaml' }}" \
             --smoke \
             --output results/results.json
 
