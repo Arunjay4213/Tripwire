@@ -21,6 +21,9 @@ python -m pytest tests/ -q
 python -m pytest tests/test_judge.py -q
 python -m pytest tests/test_scenarios.py::test_resolve_scenarios_known_and_unknown -q
 
+# Create a starter config to edit (what a fresh `pip install` user runs first)
+python -m tripwire init
+
 # Run a sweep against the built-in adapters (needs a provider key in .env)
 python -m tripwire --config tripwire/config/threat_model.example.yaml --smoke
 

@@ -24,15 +24,95 @@ from tripwire.harness.reporter import (
 )
 from tripwire.harness.runner import run_sweep
 
+# A ready-to-run starter config written by `tripwire init` -- so a fresh
+# `pip install` has something to point --config at without cloning the repo.
+STARTER_CONFIG = """\
+# Tripwire config -- created by `tripwire init`. Edit, then run:
+#   tripwire --config threat_model.yaml --smoke                 # quick check
+#   tripwire --config threat_model.yaml                         # full run
+#   tripwire --config threat_model.yaml --agent my_agent.py     # your own agent
+
+# The model under test. Any OpenAI-compatible endpoint: set OPENAI_API_KEY (and
+# OPENAI_BASE_URL for Anthropic/Groq). Examples: gpt-4o-mini, claude-haiku-4-5.
+models:
+  - gpt-4o-mini
+
+suites:
+  - workspace
+
+# The agent(s) to test. Built-ins: raw_loop, langgraph, multi_agent.
+# Override them entirely with `tripwire --agent path/to/your_agent.py`.
+adapters:
+  - raw_loop
+
+# The tasks to attack the agent on, each with its own authorized recipient.
+scenarios:
+  - invoice
+  - helpdesk
+  - calendar
+  - expense
+
+# The attacks to run (see docs/attacks.md). The hand-crafted ones below are the
+# ones that actually break defenses; `direct` is a weak baseline for reference.
+# Add `iterative` / `tree_attacker` for adaptive attacks (needs ATTACKER_MODEL).
+attacks:
+  - direct
+  - metadata_exfil
+  - public_identifier
+  - forged_boundary
+  - prerequisite_mirror
+  - mundane_redirect
+
+# Defenses to measure, cheap-weak to expensive-strong. `null` = no defense.
+defenses:
+  - null
+  - prompt_hardening
+  - spotlighting
+
+# Seeds = independent trials (the model still samples at temperature). More
+# seeds -> tighter confidence intervals. 3 is a quick look; 15+ for real numbers.
+seeds: [0, 1, 2]
+"""
+
+
+def _init_command(argv: list[str]) -> None:
+    """`tripwire init [path]` -- write a starter config the user can run."""
+    p = argparse.ArgumentParser(
+        prog="tripwire init",
+        description="Write a starter threat_model.yaml you can edit and run.",
+    )
+    p.add_argument("path", nargs="?", default="threat_model.yaml",
+                   help="where to write the config (default: threat_model.yaml)")
+    p.add_argument("--force", action="store_true", help="overwrite if the file already exists")
+    args = p.parse_args(argv)
+
+    if os.path.exists(args.path) and not args.force:
+        print(f"Error: {args.path} already exists. Use --force to overwrite.", file=sys.stderr)
+        sys.exit(1)
+    with open(args.path, "w") as f:
+        f.write(STARTER_CONFIG)
+    print(
+        f"Wrote {args.path}. Next:\n"
+        f"  export OPENAI_API_KEY=...                 # any OpenAI-compatible endpoint\n"
+        f"  tripwire --config {args.path} --smoke     # quick check\n"
+        f"  tripwire --config {args.path} --agent path/to/your_agent.py"
+    )
+
 
 def main() -> None:
+    # `tripwire init ...` writes a starter config; anything else is a run.
+    if len(sys.argv) > 1 and sys.argv[1] == "init":
+        _init_command(sys.argv[2:])
+        return
+
     parser = argparse.ArgumentParser(
         prog="tripwire",
-        description="Run prompt-injection eval sweep.",
+        description="Run a prompt-injection eval sweep against an agent.",
+        epilog="Tip: run `tripwire init` first to create a starter config.",
     )
-    parser.add_argument("--config", required=True, help="Path to threat_model.yaml")
+    parser.add_argument("--config", required=True, help="Path to threat_model.yaml (see `tripwire init`)")
     parser.add_argument("--output", default="results/results.json", help="Output JSON path")
-    parser.add_argument("--smoke", action="store_true", help="Tiny run: 1 seed, first model/attack only")
+    parser.add_argument("--smoke", action="store_true", help="Tiny run: 1 seed, first model/scenario/attack/defense")
     parser.add_argument(
         "--agent",
         metavar="PATH",

@@ -40,30 +40,23 @@ The install name is `tripwire-eval`; you `import tripwire` and run the `tripwire
 
 ## Quickstart
 
-Set a key for any OpenAI-compatible endpoint (OpenAI, Anthropic, Groq, ...):
-
 ```bash
-export OPENAI_API_KEY=sk-...
-# Anthropic/Groq: also set OPENAI_BASE_URL (e.g. https://api.anthropic.com/v1/)
+export OPENAI_API_KEY=sk-...          # any OpenAI-compatible endpoint
+                                      # (Anthropic/Groq: also set OPENAI_BASE_URL)
+
+tripwire init                         # writes a starter threat_model.yaml
+tripwire --config threat_model.yaml --smoke
 ```
 
-Write a config:
+`tripwire init` drops a commented config you can edit - the model to test, the scenarios, the attacks, and the defenses:
 
 ```yaml
-# threat_model.yaml
-models:   [gpt-4o-mini]
-suites:   [workspace]
-adapters: [raw_loop]
-scenarios: [invoice, helpdesk]         # tasks to attack the agent on
-attacks:  [direct, metadata_exfil, mundane_redirect, prerequisite_mirror]
-defenses: [null, prompt_hardening]     # null = no defense
-seeds:    [0, 1, 2]
-```
-
-Run it:
-
-```bash
-tripwire --config threat_model.yaml           # or --smoke for a tiny 1-seed run
+models:    [gpt-4o-mini]
+adapters:  [raw_loop]
+scenarios: [invoice, helpdesk, calendar, expense]   # tasks to attack the agent on
+attacks:   [direct, metadata_exfil, mundane_redirect, prerequisite_mirror, ...]
+defenses:  [null, prompt_hardening, spotlighting]   # null = no defense
+seeds:     [0, 1, 2]
 ```
 
 Or point it straight at **your own agent** - one function, no rewrite:
