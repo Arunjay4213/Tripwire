@@ -56,8 +56,6 @@ Published on PyPI as `tripwire-eval` (the import package and CLI stay `tripwire`
 
 **Attacks** (`tripwire/attacks/`): `base.py` is the `Attack` protocol (`name` + `render(canary) -> str`; attacks never embed the canary). The suite (see `docs/attacks.md`): templated baselines (`agentdojo_wrappers.py`), hand-crafted attacks (`fixed_injection.py`: metadata_exfil, public_identifier, forged_boundary, prerequisite_mirror, mundane_redirect), and adaptive attackers (`iterative.py` PAIR, `tree_attacker.py` TAP). Registered in `config/loader.py`.
 
-**spike/** - throwaway Week-0 experiments (Groq-based). NOT imported by `tripwire/`.
-
 ## Key Design Decisions
 
 - **Deterministic judge** — no LLM in scoring path. Reproducible, CI-friendly.

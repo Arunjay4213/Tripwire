@@ -30,3 +30,6 @@ build/
 docs/TODO.md
 docs/pitch.*
 docs/deck.*
+
+# throwaway Week-0 experiments (not imported by tripwire/; kept out of the repo)
+spike/
