@@ -103,3 +103,16 @@ def test_example_file_loads_and_satisfies_protocol(monkeypatch):
 
     assert isinstance(adapter, Adapter)
     assert adapter.name == "byo_agent_example"
+
+
+def test_my_agent_example_loads_and_satisfies_protocol(monkeypatch):
+    """The other documented example (examples/my_agent.py) uses the `adapter`
+    object form over a LangGraph loop. Construction makes no LLM call, so this
+    stays offline; a dummy provider key satisfies the client constructor."""
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setenv("GROQ_BASE_URL", "https://example.invalid/v1")
+
+    adapter = load_agent_module("examples/my_agent.py")
+
+    assert isinstance(adapter, Adapter)
+    assert isinstance(adapter.name, str) and adapter.name
