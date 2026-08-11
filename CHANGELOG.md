@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- A **CrewAI adapter** (`adapters: [crewai]`), a third orchestration style behind the same `EpisodeSpec` -> `NormalizedTrace` contract, so the framework comparison covers a non-graph composition model.
+  CrewAI is an optional extra (`pip install 'tripwire-eval[crewai]'`) imported lazily, so a core install is unaffected and listing an uninstalled adapter gives a clear message instead of an import error.
+- `tests/conftest.py`, which plants a dummy provider key when the environment has none, so `pytest` runs out of the box.
+  The suite is offline; the key only satisfies the OpenAI client constructor. A real key already in the environment is left alone.
+
 ## [0.2.0] - 2026-08-10
 
 Hardening pass for the open-source release.

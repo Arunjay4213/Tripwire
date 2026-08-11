@@ -15,14 +15,20 @@ from openai import OpenAI
 from tripwire.harness.llm import make_client
 
 from .base import Adapter, EpisodeSpec, NormalizedTrace
+from .crewai_adapter import CrewAIAdapter
 from .langgraph_adapter import LangGraphAdapter
 from .multi_agent_adapter import MultiAgentAdapter
 from .raw_loop import RawLoopAdapter
 
+# `crewai` needs an optional dependency, but importing and constructing it does
+# not (see crewai_adapter.py) -- CrewAI is imported lazily inside run(), so this
+# registry stays importable on a core install and a user who lists an adapter
+# they haven't installed gets a clear message at run time, not an import error.
 ADAPTER_REGISTRY: dict[str, type] = {
     "raw_loop": RawLoopAdapter,
     "langgraph": LangGraphAdapter,
     "multi_agent": MultiAgentAdapter,
+    "crewai": CrewAIAdapter,
 }
 
 
