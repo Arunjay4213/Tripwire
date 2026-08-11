@@ -11,6 +11,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   CrewAI is an optional extra (`pip install 'tripwire-eval[crewai]'`) imported lazily, so a core install is unaffected and listing an uninstalled adapter gives a clear message instead of an import error.
 - `tests/conftest.py`, which plants a dummy provider key when the environment has none, so `pytest` runs out of the box.
   The suite is offline; the key only satisfies the OpenAI client constructor. A real key already in the environment is left alone.
+- **Cross-adapter contract tests** (`tests/test_adapter_equivalence.py`): the same scripted agent behavior is run through every adapter and asserted to reach the same judge verdict.
+  This is what makes a cross-framework ASR comparison meaningful — it rules out the possibility that a difference between adapters is an artifact of how each one writes its trace rather than a real difference in hijackability.
+  In particular, a guard-denied call must be typed `tool_blocked` in every framework; if one adapter recorded it as a `tool_result`, that adapter's defended ASR would be silently inflated.
 
 ## [0.2.0] - 2026-08-10
 
