@@ -26,7 +26,7 @@ def _fake_groq_env(monkeypatch):
 
 
 def test_registry_contains_known_adapters():
-    assert set(ADAPTER_REGISTRY) == {"raw_loop", "langgraph", "multi_agent"}
+    assert set(ADAPTER_REGISTRY) == {"raw_loop", "langgraph", "multi_agent", "crewai"}
 
 
 def test_resolves_raw_loop():

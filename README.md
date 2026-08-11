@@ -36,7 +36,7 @@ agent=raw_loop   defense=no_defense
 pip install tripwire-eval        # or: uv pip install tripwire-eval
 ```
 
-The install name is `tripwire-eval`; you `import tripwire` and run the `tripwire` command (like `pip install scikit-learn` -> `import sklearn`). Optional extras: `tripwire-eval[agentdojo]` (real AgentDojo benchmark), `[viz]` (plots), `[all]`.
+The install name is `tripwire-eval`; you `import tripwire` and run the `tripwire` command (like `pip install scikit-learn` -> `import sklearn`). Optional extras: `tripwire-eval[agentdojo]` (real AgentDojo benchmark), `[crewai]` (the CrewAI adapter), `[viz]` (plots), `[all]`.
 
 ## Quickstart
 
@@ -75,7 +75,7 @@ Your agent just needs to expose `run(spec) -> NormalizedTrace` (or an `adapter` 
 - **Realistic scenarios.** `invoice`, `helpdesk`, `calendar`, `expense` - each a different task with its own authorized recipient. Your agent is tested across all of them.
 - **Actionable feedback.** Every run ends with a per-attack report: what leaked, why, and the concrete fix.
 - **Deterministic, honest scoring.** Pure-Python judge (no LLM), fixed seeds, Wilson confidence intervals instead of bare percentages. Runs in CI.
-- **Framework-agnostic.** Reference adapters for a raw tool loop, LangGraph, and a multi-agent LangGraph relay - all behind one contract, so cross-framework comparison is fair.
+- **Framework-agnostic.** Reference adapters for a raw tool loop, LangGraph, a multi-agent LangGraph relay, and CrewAI - all behind one contract, so cross-framework comparison is fair.
 - **Real AgentDojo, too.** A [bridge](docs/sample-agents-and-agentdojo.md) runs actual AgentDojo workspace tasks with AgentDojo's own environment-state scoring.
 
 ## How it works
@@ -113,7 +113,7 @@ python scripts/ci/check_asr_threshold.py --results results.json --threshold 0.5
 ```bash
 git clone https://github.com/Arunjay4213/Tripwire && cd Tripwire
 pip install -e ".[dev]"     # or: uv pip install -e ".[dev]"
-pytest                      # 295 offline tests, no network
+pytest                      # 351 offline tests, no network
 ```
 
 ## License

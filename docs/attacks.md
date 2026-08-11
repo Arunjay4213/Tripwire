@@ -138,6 +138,7 @@ Adapters available (`tripwire/adapters/loader.py`):
 - `raw_loop` - minimal ReAct-style baseline, no framework.
 - `langgraph` - single-agent LangGraph tool loop.
 - `multi_agent` - a LangGraph relay where one agent summarizes the inbox for a second agent that never sees it (second-order / relay injection).
+- `crewai` - a CrewAI role/goal/crew agent, a non-graph way of composing an agent. Needs the optional extra: `pip install 'tripwire-eval[crewai]'`.
 
 To run the full suite against all frameworks, list them all in the config (`tripwire/config/threat_model.example.yaml` ships this way):
 

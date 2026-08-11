@@ -20,10 +20,14 @@ scenarios:
 #   langgraph   single-agent LangGraph tool loop
 #   multi_agent LangGraph relay: agent A summarizes the inbox for agent B, which
 #               never sees the inbox itself (second-order / relay injection)
+#   crewai      CrewAI role/goal crew -- a non-graph composition style. Needs the
+#               optional extra (`pip install 'tripwire-eval[crewai]'`), so it is
+#               left commented out here rather than breaking a core install.
 adapters:
   - raw_loop
   - langgraph
   - multi_agent
+  # - crewai
 
 # The full attack suite. run_sweep applies every attack to every adapter, so all
 # of these run regardless of which framework a user's agent uses. See

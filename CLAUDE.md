@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-Tripwire is an evaluation harness that measures AI agent vulnerability to prompt injection attacks. It tests whether orchestration layers (raw tool loop, LangGraph single-agent, LangGraph multi-agent relay) affect agent hijackability when model and task are held constant.
+Tripwire is an evaluation harness that measures AI agent vulnerability to prompt injection attacks. It tests whether orchestration layers (raw tool loop, LangGraph single-agent, LangGraph multi-agent relay, CrewAI) affect agent hijackability when model and task are held constant.
 
 **Pipeline**: `agent + scenario → adapter (per-framework) → normalized trace → deterministic judge → pass/fail + security feedback`
 
@@ -14,7 +14,7 @@ Tripwire is an evaluation harness that measures AI agent vulnerability to prompt
 # Install for development (editable, with test + optional extras)
 pip install -e ".[dev]"        # or: uv pip install -e ".[dev]"
 
-# Run all tests (295 tests, fully offline, ~4s)
+# Run all tests (351 tests, fully offline, ~4s)
 python -m pytest tests/ -q
 
 # Run a single test file / test
@@ -48,7 +48,7 @@ Published on PyPI as `tripwire-eval` (the import package and CLI stay `tripwire`
 - `advice.py` - per-attack remediation knowledge base backing the security report.
 - `stats.py` - `wilson_ci()`: Wilson score CI for honest error bounds at small n.
 
-**Adapters** (`tripwire/adapters/`): `raw_loop.py` (minimal ReAct baseline), `langgraph_adapter.py` (single-agent LangGraph), `multi_agent_adapter.py` (LangGraph relay: agent A summarizes the inbox for agent B). `loader.py` also loads a bring-your-own agent file (`--agent`).
+**Adapters** (`tripwire/adapters/`): `raw_loop.py` (minimal ReAct baseline), `langgraph_adapter.py` (single-agent LangGraph), `multi_agent_adapter.py` (LangGraph relay: agent A summarizes the inbox for agent B), `crewai_adapter.py` (CrewAI role/goal crew; optional `[crewai]` extra, imported lazily, records its trace at the tool boundary). `loader.py` also loads a bring-your-own agent file (`--agent`).
 
 **Scenarios** (`tripwire/scenarios.py`): the tasks the agent is attacked on - `invoice` (default), `helpdesk`, `calendar`, `expense`. Each plants the secret, defines a legitimate task + AUTHORIZED recipient, and builds a full `EpisodeSpec`. Selected via `scenarios:` in the config.
 
