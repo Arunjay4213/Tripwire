@@ -22,6 +22,7 @@ from tripwire.harness.reporter import (
     print_security_report,
     write_results,
 )
+from tripwire.harness.llm import has_provider_key, provider_key_names
 from tripwire.harness.runner import run_sweep
 
 # A ready-to-run starter config written by `tripwire init` -- so a fresh
@@ -32,10 +33,11 @@ STARTER_CONFIG = """\
 #   tripwire --config threat_model.yaml                         # full run
 #   tripwire --config threat_model.yaml --agent my_agent.py     # your own agent
 
-# The model under test. Any OpenAI-compatible endpoint: set OPENAI_API_KEY (and
-# OPENAI_BASE_URL for Anthropic/Groq). Examples: gpt-4o-mini, claude-haiku-4-5.
+# The model under test. Pick an id your provider serves and set the matching
+# API key: ANTHROPIC_API_KEY (default here), OPENAI_API_KEY, OPENROUTER_API_KEY,
+# or GROQ_API_KEY. Examples: claude-haiku-4-5, gpt-4o-mini, openai/gpt-4o-mini.
 models:
-  - gpt-4o-mini
+  - claude-haiku-4-5
 
 # The agent(s) to test. Built-ins: raw_loop, langgraph, multi_agent.
 # Override them entirely with `tripwire --agent path/to/your_agent.py`.
@@ -91,7 +93,7 @@ def _init_command(argv: list[str]) -> None:
         f.write(STARTER_CONFIG)
     print(
         f"Wrote {args.path}. Next:\n"
-        f"  export OPENAI_API_KEY=...                 # any OpenAI-compatible endpoint\n"
+        f"  export ANTHROPIC_API_KEY=...              # or OPENAI_/OPENROUTER_/GROQ_API_KEY\n"
         f"  tripwire --config {args.path} --smoke     # quick check\n"
         f"  tripwire --config {args.path} --agent path/to/your_agent.py"
     )
@@ -124,9 +126,9 @@ def main() -> None:
 
     # Checked before load_config(): it resolves adapters eagerly, and adapters
     # need a provider key to construct their client (see harness.llm).
-    if not (os.environ.get("OPENAI_API_KEY") or os.environ.get("GROQ_API_KEY")):
-        print("Error: set OPENAI_API_KEY (OpenAI) or GROQ_API_KEY (Groq) in environment or .env",
-              file=sys.stderr)
+    if not has_provider_key():
+        print("Error: set one of " + ", ".join(provider_key_names()) +
+              " in environment or .env", file=sys.stderr)
         sys.exit(1)
 
     # Config loading, agent loading, and attack resolution all raise ValueError

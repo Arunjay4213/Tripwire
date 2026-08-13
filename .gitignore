@@ -33,3 +33,6 @@ docs/deck.*
 
 # throwaway Week-0 experiments (not imported by tripwire/; kept out of the repo)
 spike/
+
+# local demo-video sandbox
+demo/

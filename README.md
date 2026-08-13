@@ -41,17 +41,18 @@ The install name is `tripwire-eval`; you `import tripwire` and run the `tripwire
 ## Quickstart
 
 ```bash
-export OPENAI_API_KEY=sk-...          # any OpenAI-compatible endpoint
-                                      # (Anthropic/Groq: also set OPENAI_BASE_URL)
+export ANTHROPIC_API_KEY=sk-ant-...   # or OPENAI_API_KEY / OPENROUTER_API_KEY / GROQ_API_KEY
 
 tripwire init                         # writes a starter threat_model.yaml
 tripwire --config threat_model.yaml --smoke
 ```
 
+Set whichever provider key matches the model you want to test - `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or `GROQ_API_KEY`. The first one set wins, each defaults to its provider's endpoint, and any can be pointed elsewhere with the matching `*_BASE_URL`.
+
 `tripwire init` drops a commented config you can edit - the model to test, the scenarios, the attacks, and the defenses:
 
 ```yaml
-models:    [gpt-4o-mini]
+models:    [claude-haiku-4-5]
 adapters:  [raw_loop]
 scenarios: [invoice, helpdesk, calendar, expense]   # tasks to attack the agent on
 attacks:   [direct, metadata_exfil, mundane_redirect, prerequisite_mirror, ...]
