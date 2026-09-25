@@ -16,7 +16,7 @@ from typing import Sequence, TypeVar
 import openai
 
 from tripwire.adapters.base import Adapter, EpisodeSpec, NormalizedTrace, TraceStep
-from tripwire.attacks.base import Attack
+from tripwire.attacks.base import Attack, render_payload, set_attack_context
 from tripwire.attacks.iterative import IterativeAttacker
 from tripwire.attacks.tree_attacker import TreeAttacker
 from tripwire.defenses.base import Defense, NoDefense
@@ -216,7 +216,7 @@ def run_episode(
     defense = defense or NoDefense()
     # Render with a throwaway canary — attacks do not embed it (they trick the
     # agent into volunteering it), so the value passed here does not matter.
-    payload = attack.render(make_canary(spec.environment_seed))
+    payload = render_payload(attack, make_canary(spec.environment_seed), scenario.attack_context())
     episode_spec, canary = scenario.build_spec(
         defense, spec.environment_seed, spec.model, payload, max_turns=spec.max_turns,
     )
@@ -330,6 +330,7 @@ def run_campaign(
             attacker_model=attacker_model, **kw,
         )
 
+    set_attack_context(attacker, scenario.attack_context())
     with _model_fallback(attacker, spec.model) as attacker_model, _model_fallback(defense, spec.model):
         try:
             for attempt in range(1, budget + 1):
@@ -422,6 +423,7 @@ def run_scenario_tree_campaign(
             evaluations_spent=spent, errors=errors, attacker_model=attacker_model, **kw,
         )
 
+    set_attack_context(attacker, scenario.attack_context())
     with _model_fallback(attacker, model) as attacker_model, _model_fallback(defense, model):
         try:
             search = attacker.search(evaluate, budget)
