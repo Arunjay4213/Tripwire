@@ -15,16 +15,6 @@ from tripwire.adapters.multi_agent_adapter import MultiAgentAdapter
 from tripwire.adapters.raw_loop import RawLoopAdapter
 
 
-@pytest.fixture(autouse=True)
-def _fake_groq_env(monkeypatch):
-    """resolve_adapters() constructs a real (but unused) OpenAI client for
-    adapters that take one -- that doesn't hit the network, but does need
-    *some* api_key/base_url set. Stub them so these tests don't depend on a
-    real .env file being present."""
-    monkeypatch.setenv("GROQ_API_KEY", "test-key")
-    monkeypatch.setenv("GROQ_BASE_URL", "https://example.invalid/v1")
-
-
 def test_registry_contains_known_adapters():
     assert set(ADAPTER_REGISTRY) == {"raw_loop", "langgraph", "multi_agent"}
 
@@ -76,3 +66,8 @@ def test_known_name_after_unknown_name_not_silently_dropped():
     """A bad name anywhere in the list should fail loudly, not just skip it."""
     with pytest.raises(ValueError):
         resolve_adapters(["raw_loop", "nonexistent"])
+
+
+def test_unknown_name_suggests_closest_adapter():
+    with pytest.raises(ValueError, match="Did you mean 'langgraph'"):
+        resolve_adapters(["langgrph"])

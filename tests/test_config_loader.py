@@ -69,3 +69,141 @@ def test_valid_config_loads(tmp_path, monkeypatch):
     assert cfg.models == ["m"]
     assert cfg.attacks == ["direct"]
     assert [a.name for a in cfg.adapters] == ["raw_loop"]
+
+
+# --- unknown keys --------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "line, suggestion",
+    [("defense: [spotlighting]", "defenses"), ("scenario: [helpdesk]", "scenarios")],
+)
+def test_misspelled_top_level_key_raises_with_suggestion(tmp_path, line, suggestion):
+    """Regression: `defense:` was silently ignored and the run measured the
+    undefended baseline while being read as spotlighting results."""
+    with pytest.raises(ValueError, match=f"Did you mean '{suggestion}'"):
+        load_config(_write(tmp_path, _VALID + line + "\n"))
+
+
+def test_misspelled_limits_key_raises_with_suggestion(tmp_path):
+    text = _VALID + "limits:\n  campain_budget: 4\n"
+    with pytest.raises(ValueError, match="Did you mean 'campaign_budget'"):
+        load_config(_write(tmp_path, text))
+
+
+def test_misspelled_defense_name_raises_with_suggestion(tmp_path):
+    text = _VALID + "defenses: [spotlightng]\n"
+    with pytest.raises(ValueError, match="Did you mean 'spotlighting'"):
+        load_config(_write(tmp_path, text))
+
+
+def test_misspelled_attack_is_caught_at_load_not_after_smoke(tmp_path):
+    """The 2nd attack is dropped by --smoke, so it must be validated at load."""
+    text = _VALID.replace("attacks: [direct]", "attacks: [direct, mundane_redirct]")
+    with pytest.raises(ValueError, match="Did you mean 'mundane_redirect'"):
+        load_config(_write(tmp_path, text))
+
+
+# --- optional keys are type-checked ----------------------------------------------
+
+@pytest.mark.parametrize(
+    "extra, match",
+    [
+        ("limits: 5\n", "'limits' must be a mapping"),
+        ("limits:\n  smoke: \"false\"\n", "smoke must be true or false"),
+        ("limits:\n  campaign_budget: \"8\"\n", "campaign_budget must be an integer"),
+        ("limits:\n  campaign_budget: 0\n", "campaign_budget must be an integer >= 1"),
+        ("limits:\n  max_turns: 0\n", "max_turns must be an integer >= 1"),
+        ("limits:\n  max_turns: true\n", "max_turns must be an integer"),
+        ("defenses:\n", "'defenses' must be a non-empty list"),
+        ("defenses: []\n", "'defenses' must be a non-empty list"),
+        ("scenarios:\n", "'scenarios' must be a non-empty list"),
+        ("scenarios: [invoice, 3]\n", "must list names as strings"),
+        ("allowed_tools: send_email\n", "'allowed_tools' must be a non-empty list"),
+        ("allowed_tools: [read_inbx]\n", "Did you mean 'read_inbox'"),
+    ],
+)
+def test_bad_optional_values_raise_clear_errors(tmp_path, extra, match):
+    with pytest.raises(ValueError, match=match):
+        load_config(_write(tmp_path, _VALID + extra))
+
+
+@pytest.mark.parametrize("seeds", ["['0']", "[-1]", "[true]", "[0, 0]", "[1.5]"])
+def test_bad_seeds_raise(tmp_path, seeds):
+    text = _VALID.replace("seeds: [0]", f"seeds: {seeds}")
+    with pytest.raises(ValueError, match="seeds"):
+        load_config(_write(tmp_path, text))
+
+
+def test_limits_are_parsed_with_defaults(tmp_path):
+    cfg = load_config(_write(tmp_path, _VALID))
+    assert (cfg.smoke, cfg.campaign_budget, cfg.max_turns, cfg.max_tokens_per_run) == (
+        False, 8, 5, None,
+    )
+    cfg = load_config(_write(tmp_path, _VALID + "limits:\n  max_turns: 7\n  smoke: true\n"))
+    assert cfg.max_turns == 7
+    assert cfg.smoke is True
+
+
+def test_null_defense_entry_is_no_defense(tmp_path):
+    cfg = load_config(_write(tmp_path, _VALID + "defenses: [null, spotlighting]\n"))
+    assert [d.name for d in cfg.defenses] == ["no_defense", "spotlighting"]
+
+
+# --- tool_filter is scenario-relative ------------------------------------------
+
+_ALL_SCENARIOS = "scenarios: [invoice, helpdesk, calendar, expense]\n"
+
+
+def _tool_filter(cfg):
+    return next(d for d in cfg.defenses if d.name == "tool_filter")
+
+
+def test_tool_filter_keeps_every_scenario_read_tool_and_drops_the_sink(tmp_path):
+    cfg = load_config(_write(tmp_path, _VALID + _ALL_SCENARIOS + "defenses: [tool_filter]\n"))
+    tf = _tool_filter(cfg)
+    assert isinstance(tf.allowed_tools, frozenset)
+    for scenario in cfg.scenarios:
+        names = [t["function"]["name"] for t in tf.filter_tool_calls(scenario.tool_schemas())]
+        assert names == [scenario.read_tool]
+        assert tf.check_tool_call(scenario.read_tool, {})[0] is True
+        assert tf.check_tool_call("send_email", {"to": "x", "body": "y"})[0] is False
+    assert cfg.warnings == []
+
+
+def test_explicit_allowlist_missing_a_read_tool_warns_but_keeps_it(tmp_path):
+    text = _VALID + _ALL_SCENARIOS + "defenses: [tool_filter]\nallowed_tools: [read_inbox]\n"
+    cfg = load_config(_write(tmp_path, text))
+    tf = _tool_filter(cfg)
+    assert tf.check_tool_call("read_ticket", {})[0] is True
+    joined = "\n".join(cfg.warnings)
+    for tool in ("read_ticket", "read_calendar", "read_document"):
+        assert tool in joined
+    assert "'read_inbox'" not in joined
+
+
+def test_allowlisting_the_sink_warns(tmp_path):
+    text = _VALID + "defenses: [tool_filter]\nallowed_tools: [read_inbox, send_email]\n"
+    cfg = load_config(_write(tmp_path, text))
+    assert any("leak-capable" in w for w in cfg.warnings)
+
+
+def test_allowed_tools_without_tool_filter_warns(tmp_path):
+    cfg = load_config(_write(tmp_path, _VALID + "allowed_tools: [read_inbox]\n"))
+    assert any("no effect" in w for w in cfg.warnings)
+
+
+@pytest.mark.parametrize(
+    "path", ["tripwire/config/threat_model.example.yaml", "tripwire/config/ci.example.yaml"]
+)
+def test_example_configs_keep_the_read_tool_under_tool_filter(path):
+    """Regression: allowed_tools: [read_inbox] stripped the read tool from
+    helpdesk/calendar/expense, so those rows measured an agent that could not
+    read the injection at all."""
+    cfg = load_config(path)
+    assert cfg.warnings == []
+    tf = _tool_filter(cfg)
+    for scenario in cfg.scenarios:
+        offered = [t["function"]["name"] for t in tf.filter_tool_calls(scenario.tool_schemas())]
+        assert scenario.read_tool in offered
+        assert "send_email" not in offered
+        assert tf.check_tool_call(scenario.read_tool, {})[0] is True

@@ -6,13 +6,7 @@ import argparse
 import os
 import sys
 
-from dotenv import load_dotenv
-
-# Allow running as `python -m tripwire` from repo root (tripwire/ is the package
-# but imports use `from tripwire.…`).  Ensure repo root is on sys.path.
-_repo_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if _repo_root not in sys.path:
-    sys.path.insert(0, _repo_root)
+from dotenv import find_dotenv, load_dotenv
 
 from tripwire.adapters.loader import load_agent_module
 from tripwire.config.loader import load_config, resolve_attacks
@@ -22,8 +16,13 @@ from tripwire.harness.reporter import (
     print_security_report,
     write_results,
 )
-from tripwire.harness.llm import has_provider_key, provider_key_names
+from tripwire.harness.llm import active_provider, has_provider_key, make_client, provider_key_names
 from tripwire.harness.runner import run_sweep
+
+# Exit codes, so CI can tell "nothing was measured" apart from a bad config.
+EXIT_CONFIG_ERROR = 1   # bad config / agent file / missing key / failed preflight
+EXIT_NOTHING_SCORED = 2  # the sweep ran but not a single episode was scored
+EXIT_ERRORS_STRICT = 3   # --strict and at least one episode errored
 
 # A ready-to-run starter config written by `tripwire init` -- so a fresh
 # `pip install` has something to point --config at without cloning the repo.
@@ -72,6 +71,10 @@ defenses:
 # Seeds = independent trials (the model still samples at temperature). More
 # seeds -> tighter confidence intervals. 3 is a quick look; 15+ for real numbers.
 seeds: [0, 1, 2]
+
+# Run controls. max_turns = model calls per episode, the same for every adapter.
+limits:
+  max_turns: 5
 """
 
 
@@ -99,6 +102,98 @@ def _init_command(argv: list[str]) -> None:
     )
 
 
+def _load_env_file() -> None:
+    """Load the user's .env, searching from the current directory upward.
+
+    Plain load_dotenv() searches upward from the directory of the calling
+    file, which for a pip-installed tripwire is site-packages, so a .env next
+    to the user's config would never be found.
+    """
+    env_path = find_dotenv(usecwd=True)
+    if env_path:
+        load_dotenv(env_path)
+
+
+def _provider_label() -> str:
+    provider = active_provider()
+    if provider is None:
+        return "none"
+    return f"{provider.key_env} -> {provider.base_url() or 'https://api.openai.com/v1'}"
+
+
+def _preflight_models(config) -> list[str]:
+    """Every model id the sweep will call: the targets, plus ATTACKER_MODEL /
+    GUARD_MODEL when the attacks/defenses that use them are configured."""
+    models = list(config.models)
+    if os.getenv("ATTACKER_MODEL") and any(a in ("iterative", "tree_attacker") for a in config.attacks):
+        models.append(os.environ["ATTACKER_MODEL"])
+    if os.getenv("GUARD_MODEL") and any(d.name == "outbound_guard" for d in config.defenses):
+        models.append(os.environ["GUARD_MODEL"])
+    return list(dict.fromkeys(models))
+
+
+def _preflight(config) -> None:
+    """One cheap chat completion per model, so a model/provider mismatch fails
+    in seconds with a clear message instead of as N errored episodes."""
+    client = make_client()
+    for model in _preflight_models(config):
+        try:
+            client.chat.completions.create(
+                model=model,
+                messages=[{"role": "user", "content": "Reply with the single word OK."}],
+            )
+        except Exception as e:  # noqa: BLE001 -- any failure here is the finding
+            print(
+                f"Error: preflight call to model {model!r} failed on provider "
+                f"{_provider_label()}: {type(e).__name__}: {e}",
+                file=sys.stderr,
+            )
+            sys.exit(EXIT_CONFIG_ERROR)
+        print(f"Preflight ok: {model}")
+
+
+def _is_scored(result: object) -> bool:
+    return getattr(result, "status", "ok") == "ok"
+
+
+def _report_outcome(episodes: list, campaigns: list, strict: bool) -> None:
+    """Exit non-zero when the sweep measured nothing, and flag errored runs.
+
+    Errored episodes/campaigns stay in the results (and tables) as errors;
+    they are never counted as defended. This makes sure a sweep where some or
+    all runs errored cannot look like a clean, complete run.
+    """
+    results = [*episodes, *campaigns]
+    errored = [r for r in results if not _is_scored(r)]
+    scored = len(results) - len(errored)
+
+    if scored == 0:
+        print(
+            f"\nError: nothing was scored ({len(errored)} episode(s)/campaign(s) errored, "
+            "none scored), so there is no result to report.",
+            file=sys.stderr,
+        )
+        messages = [str(getattr(r, "error", "") or "").strip() for r in errored]
+        for message in list(dict.fromkeys(m for m in messages if m))[:3]:
+            print(f"  e.g. {message.splitlines()[-1]}", file=sys.stderr)
+        print(
+            f"Check that the models in your config are served by the active provider "
+            f"({_provider_label()}); `--preflight` checks this up front.",
+            file=sys.stderr,
+        )
+        sys.exit(EXIT_NOTHING_SCORED)
+
+    if errored:
+        print(
+            f"\nWARNING: {len(errored)} of {len(results)} episode(s)/campaign(s) errored and "
+            f"were not scored. The rates above cover only the {scored} scored run(s); see "
+            "the error rows in the results file.",
+            file=sys.stderr,
+        )
+        if strict:
+            sys.exit(EXIT_ERRORS_STRICT)
+
+
 def main() -> None:
     # `tripwire init ...` writes a starter config; anything else is a run.
     if len(sys.argv) > 1 and sys.argv[1] == "init":
@@ -108,7 +203,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         prog="tripwire",
         description="Run a prompt-injection eval sweep against an agent.",
-        epilog="Tip: run `tripwire init` first to create a starter config.",
+        epilog="Tip: run `tripwire init` first to create a starter config. "
+               "Exit codes: 0 ok, 1 config/setup error, 2 nothing scored, "
+               "3 errored episodes under --strict.",
     )
     parser.add_argument("--config", required=True, help="Path to threat_model.yaml (see `tripwire init`)")
     parser.add_argument("--output", default="results/results.json", help="Output JSON path")
@@ -120,28 +217,38 @@ def main() -> None:
              "(`adapter = ...` or `def run(spec): ...`) -- runs the attack "
              "suite against it instead of the configured adapters",
     )
+    parser.add_argument(
+        "--strict", action="store_true",
+        help=f"exit {EXIT_ERRORS_STRICT} if any episode errored (default: warn and exit 0)",
+    )
+    parser.add_argument(
+        "--preflight", action="store_true",
+        help="before the sweep, make one cheap call per configured model and stop "
+             "if the provider rejects it (catches a model/provider mismatch)",
+    )
     args = parser.parse_args()
 
-    load_dotenv()
+    _load_env_file()
 
     # Checked before load_config(): it resolves adapters eagerly, and adapters
     # need a provider key to construct their client (see harness.llm).
     if not has_provider_key():
         print("Error: set one of " + ", ".join(provider_key_names()) +
               " in environment or .env", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(EXIT_CONFIG_ERROR)
 
-    # Config loading, agent loading, and attack resolution all raise ValueError
+    # Config loading, agent loading, and attack resolution raise ValueError
     # (or FileNotFoundError) with actionable messages for the mistakes a new
     # user makes -- a bad config key, an unknown adapter/attack name, a missing
-    # --agent file. Turn those into a clean one-line error, not a traceback.
+    # --agent file. TypeError/AttributeError cover a config value of a shape
+    # nothing validated. Turn all of them into a clean one-line error.
     try:
         config = load_config(args.config)
 
         if args.smoke:
             config.smoke = True
 
-        # Apply smoke overrides
+        # Apply smoke overrides (after load_config validated every name).
         if config.smoke:
             config.seeds = [config.seeds[0]] if config.seeds else [0]
             config.models = config.models[:1]
@@ -153,17 +260,25 @@ def main() -> None:
         # attacks, defenses, and judge, just a different tool loop under test.
         adapters = [load_agent_module(args.agent)] if args.agent else config.adapters
         attacks = resolve_attacks(config.attacks)
-    except (ValueError, FileNotFoundError) as e:
+    except (ValueError, FileNotFoundError, TypeError, AttributeError) as e:
         print(f"Error: {e}", file=sys.stderr)
-        sys.exit(1)
+        sys.exit(EXIT_CONFIG_ERROR)
+
+    for warning in config.warnings:
+        print(f"Warning: {warning}", file=sys.stderr)
+
+    print(f"Provider: {_provider_label()}")
+    if args.preflight:
+        _preflight(config)
 
     print(f"Running sweep: {len(adapters)} adapter(s) x {len(config.models)} model(s) "
           f"x {len(config.scenarios)} scenario(s) x {len(attacks)} attack(s) "
-          f"x {len(config.defenses)} defense(s) x {len(config.seeds)} seed(s)")
+          f"x {len(config.defenses)} defense(s) x {len(config.seeds)} seed(s), "
+          f"max {config.max_turns} turn(s) per episode")
 
     episodes, campaigns = run_sweep(
         adapters, config.models, attacks, config.seeds, config.campaign_budget,
-        config.defenses, config.scenarios,
+        config.defenses, config.scenarios, max_turns=config.max_turns,
     )
 
     # Ensure output directory exists
@@ -171,15 +286,17 @@ def main() -> None:
     write_results(episodes, args.output, campaigns)
     print(f"\nResults written to {args.output}")
 
-    if episodes:
-        print()
-        print_asr_table(episodes)
-    if campaigns:
-        print()
-        print_campaign_table(campaigns)
-    if episodes or campaigns:
+    if any(_is_scored(r) for r in [*episodes, *campaigns]):
+        if episodes:
+            print()
+            print_asr_table(episodes)
+        if campaigns:
+            print()
+            print_campaign_table(campaigns)
         print()
         print_security_report(episodes, campaigns)
+
+    _report_outcome(episodes, campaigns, args.strict)
 
 
 if __name__ == "__main__":

@@ -65,10 +65,13 @@ attacks:
 #                    the model fenced text is data, not instructions. Still
 #                    cheap (no extra model), structurally stronger than L1.
 #                    Microsoft Spotlighting, Hines et al. 2024 (arXiv:2403.14720).
-#   tool_filter      Removes the leak-capable tool from the menu entirely.
-#                    Degenerate for a pure leak scenario -- drop send_email and
-#                    utility goes to 0, keep it and the defense does nothing --
-#                    kept as the illustrative "blunt instrument" reference point.
+#   tool_filter      Denies the sink: removes send_email (the leak-capable
+#                    tool) from the menu and blocks it at execution time, while
+#                    each scenario keeps its own read tool (read_inbox,
+#                    read_ticket, read_calendar, read_document), so the agent
+#                    still reads the task and the injection. Degenerate for a
+#                    pure leak scenario -- no send_email means ASR 0 and
+#                    utility 0 -- kept as the "blunt instrument" reference point.
 #   outbound_guard   L3. A second model inspects each send_email before it fires
 #                    and blocks a detected secret leak. Strongest and most
 #                    expensive (an extra model call per action; false positives
@@ -80,17 +83,14 @@ defenses:
   - tool_filter
   - outbound_guard
 
-# tool_filter's allowlist (required by tool_filter). Excluding send_email means
-# the model is never even offered the leak-capable tool -- and check_tool_call
-# blocks it even if the model free-forms the call anyway -- regardless of what
-# the attack talks it into.
-allowed_tools:
-  - read_inbox
+# tool_filter needs no extra config: it keeps every listed scenario's read tool
+# and denies everything else, including send_email. `allowed_tools: [...]` is an
+# optional list of EXTRA tools to keep (listing send_email would disable it).
 
 seeds: [0, 1, 2]
 
-# hard cost controls (add now, roadmap Weeks 4-5)
+# Run controls.
 limits:
-  max_tokens_per_run: null
+  max_turns: 5          # model calls per episode; the same budget for every adapter
   smoke: false          # --smoke runs a tiny subset cheaply
   campaign_budget: 8    # max attempts per adaptive (iterative) campaign
