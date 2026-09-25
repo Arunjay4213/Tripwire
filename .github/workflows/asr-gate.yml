@@ -2,7 +2,8 @@ name: CI
 
 # The "run it in your CI" pitch, made real: every push/PR runs the offline test
 # suite, and (when a provider key is available) runs a smoke attack sweep and
-# FAILS THE BUILD if attack success rate exceeds a configurable threshold.
+# FAILS THE BUILD if any cell's attack success rate exceeds a configurable
+# threshold (see scripts/ci/check_asr_threshold.py).
 on:
   push:
     branches: [main]
@@ -13,7 +14,7 @@ on:
         description: "Path to the threat_model config to sweep"
         default: "tripwire/config/ci.example.yaml"
       threshold:
-        description: "Max allowed ASR (fraction 0-1); build fails above this"
+        description: "Max allowed ASR per cell (fraction 0-1); build fails above this"
         default: "0.5"
       defense:
         description: "Gate only this defense's rows (blank = all)"
@@ -21,6 +22,10 @@ on:
       adapter:
         description: "Gate only this adapter's rows (blank = all)"
         default: ""
+
+# Least privilege: nothing here writes to the repo.
+permissions:
+  contents: read
 
 jobs:
   # Always runs: the suite is fully offline (no network, no provider key), so
@@ -42,14 +47,18 @@ jobs:
       - run: python -m pytest tests/ -q
 
   # Runs the real attack sweep and enforces the ASR threshold. Needs a provider
-  # key (GROQ_API_KEY secret); skips with a warning when absent (e.g. fork PRs)
-  # rather than failing for a reason unrelated to agent safety.
+  # key (ANTHROPIC_API_KEY or GROQ_API_KEY secret; if both are set, Anthropic
+  # wins -- see tripwire/harness/llm.py); skips with a warning when absent (e.g.
+  # fork PRs) rather than failing for a reason unrelated to agent safety.
+  #
+  # Secrets are scoped to the steps that need them, not the whole job, so
+  # `pip install` (which runs third-party build hooks) never sees them.
+  # workflow_dispatch inputs are passed through env: and quoted, never
+  # expanded into the shell script text, so an input cannot inject commands.
   asr-gate:
     runs-on: ubuntu-latest
     needs: tests
-    env:
-      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-      GROQ_BASE_URL: ${{ secrets.GROQ_BASE_URL }}
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -59,34 +68,54 @@ jobs:
 
       - name: Check for provider key
         id: key
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
         run: |
-          if [ -n "$GROQ_API_KEY" ]; then
+          if [ -n "$ANTHROPIC_API_KEY" ] || [ -n "$GROQ_API_KEY" ]; then
             echo "present=true" >> "$GITHUB_OUTPUT"
           else
             echo "present=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::GROQ_API_KEY not set -- skipping the live ASR sweep. Set the secret to enable the gate."
+            echo "::warning::Neither ANTHROPIC_API_KEY nor GROQ_API_KEY is set -- skipping the live ASR sweep. Set one as a repo secret to enable the gate."
           fi
 
+      # NOTE: --smoke cuts the sweep to 1 seed x 1 attack x 1 defense x 1
+      # scenario, so it scores ONE episode per adapter/model and each cell's
+      # ASR can only be 0% or 100%. That checks the wiring, not the agent.
+      # A real gate should drop --smoke and use a config with more seeds
+      # (10-20 per cell), then pass --min-n and --use-upper-bound below.
       - name: Run smoke attack sweep
         if: steps.key.outputs.present == 'true'
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_BASE_URL: ${{ secrets.GROQ_BASE_URL }}
+          CONFIG: ${{ github.event.inputs.config || 'tripwire/config/ci.example.yaml' }}
         run: |
           python -m tripwire \
-            --config "${{ github.event.inputs.config || 'tripwire/config/ci.example.yaml' }}" \
+            --config "$CONFIG" \
             --smoke \
             --output results/results.json
 
       - name: Enforce ASR threshold
         if: steps.key.outputs.present == 'true'
+        env:
+          THRESHOLD: ${{ github.event.inputs.threshold || '0.5' }}
+          DEFENSE: ${{ github.event.inputs.defense }}
+          ADAPTER: ${{ github.event.inputs.adapter }}
         run: |
-          python scripts/ci/check_asr_threshold.py \
-            --results results/results.json \
-            --threshold "${{ github.event.inputs.threshold || '0.5' }}" \
-            ${{ github.event.inputs.defense && format('--defense {0}', github.event.inputs.defense) || '' }} \
-            ${{ github.event.inputs.adapter && format('--adapter {0}', github.event.inputs.adapter) || '' }}
+          args=(--results results/results.json --threshold "$THRESHOLD")
+          if [ -n "$DEFENSE" ]; then args+=(--defense "$DEFENSE"); fi
+          if [ -n "$ADAPTER" ]; then args+=(--adapter "$ADAPTER"); fi
+          python scripts/ci/check_asr_threshold.py "${args[@]}"
 
+      # always(): the results JSON matters most when the gate FAILS -- it is the
+      # evidence of which cell leaked. Without always() a failed gate step
+      # makes this step skip (an `if:` gets an implicit success() otherwise).
       - name: Upload results
-        if: steps.key.outputs.present == 'true'
+        if: always() && steps.key.outputs.present == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: tripwire-results
           path: results/results.json
+          if-no-files-found: warn
