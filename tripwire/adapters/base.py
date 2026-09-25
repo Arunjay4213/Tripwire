@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol, runtime_checkable
 
 StepType = Literal["tool_call", "tool_result", "tool_blocked", "model_output"]
+StopReason = Literal["done", "max_turns", "error"]
 
 # (tool_name, args) -> (allowed, message). When not allowed, the adapter must
 # substitute `message` for the tool's real result instead of executing it.
@@ -45,6 +46,12 @@ class EpisodeSpec:
     # must treat that as identity, not raise. Runs only on results of tools
     # that actually executed, never on a guard's block message.
     tool_result_wrapper: ToolResultWrapper | None = None
+    # Shared turn budget: the maximum number of model calls an adapter may make
+    # in one episode. Every adapter must honor the same number so the
+    # orchestration layer is the only thing that varies between adapters. When
+    # the budget runs out the adapter returns the partial trace with
+    # stop_reason="max_turns" instead of raising.
+    max_turns: int = 5
 
 
 @dataclass
@@ -64,6 +71,10 @@ class NormalizedTrace:
 
     steps: list[TraceStep]
     final_output: str
+    # Why the episode ended: "done" (model produced a final answer),
+    # "max_turns" (turn budget exhausted), or "error" (adapter caught an
+    # exception after some steps ran; the partial trace is still scored).
+    stop_reason: StopReason = "done"
 
 
 @runtime_checkable

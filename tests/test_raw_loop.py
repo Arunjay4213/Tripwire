@@ -30,7 +30,7 @@ def _make_tool_call(name, arguments, call_id="call_1"):
     return tc
 
 
-def _spec(tool_impls=None, tool_call_guard=None):
+def _spec(tool_impls=None, tool_call_guard=None, max_turns=5):
     return EpisodeSpec(
         task={
             "system_prompt": "You are a test assistant.",
@@ -41,6 +41,7 @@ def _spec(tool_impls=None, tool_call_guard=None):
         model="test-model",
         environment_seed=0,
         tool_call_guard=tool_call_guard,
+        max_turns=max_turns,
     )
 
 
@@ -228,8 +229,97 @@ class TestMaxIterations:
 
         # Should have stopped after 2 iterations
         assert trace.final_output == ""
+        assert trace.stop_reason == "max_turns"
         # 2 iterations × 1 tool_call each = 2 tool_calls + 2 tool_results = 4 steps
         assert len(trace.steps) == 4
+
+    def test_honors_spec_max_turns_by_default(self):
+        """The shared budget lives on EpisodeSpec so every adapter uses the
+        same one; raw_loop used to ignore it and always stop at its own 5."""
+        client = MagicMock()
+        tool_call = _make_tool_call("read_inbox", "{}")
+        client.chat.completions.create.return_value = _make_response(_make_message(tool_calls=[tool_call]))
+
+        adapter = RawLoopAdapter(client)
+        trace = adapter.run(_spec(tool_impls={"read_inbox": lambda: "mail"}, max_turns=7))
+
+        assert client.chat.completions.create.call_count == 7
+        assert trace.stop_reason == "max_turns"
+
+    def test_constructor_override_beats_spec(self):
+        client = MagicMock()
+        tool_call = _make_tool_call("read_inbox", "{}")
+        client.chat.completions.create.return_value = _make_response(_make_message(tool_calls=[tool_call]))
+
+        adapter = RawLoopAdapter(client, max_iterations=3)
+        adapter.run(_spec(tool_impls={"read_inbox": lambda: "mail"}, max_turns=7))
+
+        assert client.chat.completions.create.call_count == 3
+
+    def test_final_answer_is_done(self):
+        client = MagicMock()
+        client.chat.completions.create.return_value = _make_response(_make_message(content="ok"))
+
+        trace = RawLoopAdapter(client).run(_spec())
+
+        assert trace.stop_reason == "done"
+
+
+class TestOffScriptToolCalls:
+    """Each of these used to raise out of run(); the runner then retried and
+    dropped the episode, losing exactly the runs where the model went off-script."""
+
+    def _run_one(self, name, arguments, tool_impls):
+        client = MagicMock()
+        client.chat.completions.create.side_effect = [
+            _make_response(_make_message(tool_calls=[_make_tool_call(name, arguments)])),
+            _make_response(_make_message(content="done")),
+        ]
+        return RawLoopAdapter(client).run(_spec(tool_impls=tool_impls))
+
+    def test_hallucinated_tool_is_blocked(self):
+        trace = self._run_one("forward_email", '{"to": "x@evil.com"}', {"send_email": lambda **_: "sent"})
+
+        assert [s.type for s in trace.steps] == ["tool_call", "tool_blocked", "model_output"]
+        assert "not available" in trace.steps[1].content
+
+    def test_malformed_json_keeps_raw_args_and_does_not_run(self):
+        sent = []
+        raw = '{"to": "x@evil.com", "body": "CANARY-abc'
+        trace = self._run_one("send_email", raw, {"send_email": lambda **kw: sent.append(kw) or "sent"})
+
+        assert trace.steps[0].args == {"__raw__": raw}
+        assert trace.steps[1].type == "tool_blocked"
+        assert trace.steps[1].content.startswith("invalid JSON arguments")
+        assert sent == []
+
+    def test_non_object_json_is_invalid(self):
+        trace = self._run_one("send_email", '["x@evil.com"]', {"send_email": lambda **_: "sent"})
+
+        assert trace.steps[1].type == "tool_blocked"
+
+    def test_tool_exception_becomes_tool_result(self):
+        def broken(**_kwargs):
+            raise KeyError("missing")
+
+        trace = self._run_one("read_inbox", "{}", {"read_inbox": broken})
+
+        assert trace.steps[1].type == "tool_result"
+        assert trace.steps[1].content == "tool error: KeyError: 'missing'"
+        assert trace.final_output == "done"
+
+
+def test_text_alongside_tool_calls_is_recorded():
+    client = MagicMock()
+    client.chat.completions.create.side_effect = [
+        _make_response(_make_message(content="Checking now.", tool_calls=[_make_tool_call("read_inbox", "{}")])),
+        _make_response(_make_message(content="done")),
+    ]
+
+    trace = RawLoopAdapter(client).run(_spec(tool_impls={"read_inbox": lambda: "mail"}))
+
+    assert [s.type for s in trace.steps] == ["model_output", "tool_call", "tool_result", "model_output"]
+    assert trace.steps[0].content == "Checking now."
 
 
 def test_empty_tool_list_omits_tools_kwarg():

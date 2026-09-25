@@ -1,17 +1,45 @@
+"""Single-agent LangGraph adapter: a call_model <-> run_tools graph.
+
+Same EpisodeSpec/NormalizedTrace contract as raw_loop.py, same turn budget
+(spec.max_turns) and the same tool-call policy (_common.py), so the only
+thing that differs from raw_loop is that LangGraph drives the loop.
+
+No load_dotenv() here: importing a library module must not write a .env into
+os.environ. The CLI loads .env; scripts that build adapters directly do too.
+"""
+
 from __future__ import annotations
 
-from dotenv import load_dotenv
-from langgraph.graph import StateGraph, END
-from langgraph.graph.message import add_messages
+from typing import Annotated, Any, TypedDict
+
 from langchain_core.messages import convert_to_openai_messages
-from typing import Annotated, TypedDict
+from langgraph.errors import GraphRecursionError
+from langgraph.graph import END, StateGraph
+from langgraph.graph.message import add_messages
+from openai import OpenAI
 
 from tripwire.harness.llm import make_client
 
-from ._langgraph_shared import messages_to_trace_steps, openai_message_to_dict, run_tool as _run_tool
-from .base import EpisodeSpec, NormalizedTrace
+from ._langgraph_shared import (
+    execute_tool_call,
+    messages_to_trace_steps,
+    openai_message_to_dict,
+)
+from .base import EpisodeSpec, NormalizedTrace, StopReason
 
-load_dotenv()
+
+def recursion_limit_for(max_turns: int) -> int:
+    """LangGraph recursion_limit that allows exactly ``max_turns`` model calls.
+
+    Each loop iteration is two LangGraph super-steps: call_model, then
+    run_tools. ``max_turns`` model calls plus the tool round after each one is
+    therefore ``2 * max_turns`` super-steps, which is what raw_loop does in
+    ``max_turns`` iterations (it also runs the tools requested by its last
+    model call). The next call_model would be super-step ``2 * max_turns + 1``,
+    so LangGraph raises GraphRecursionError there and the adapter returns the
+    partial trace with stop_reason="max_turns".
+    """
+    return 2 * max_turns
 
 
 class AgentState(TypedDict):
@@ -32,8 +60,10 @@ class AgentState(TypedDict):
 class LangGraphAdapter:
     name = "langgraph"
 
-    def __init__(self):
-        self.client = make_client()
+    def __init__(self, client: OpenAI | None = None):
+        """``client`` is any OpenAI-compatible client; built from env when
+        omitted. resolve_adapters passes the sweep's shared client."""
+        self.client = client if client is not None else make_client()
 
     def _call_model(self, state: AgentState, model: str, tools_json: list[dict]) -> AgentState:
         """
@@ -63,40 +93,22 @@ class LangGraphAdapter:
 
         for call in last_message.tool_calls:
             # last_message is a coerced AIMessage here, so tool_calls are
-            # langchain ToolCall dicts: {"name", "args" (already parsed), "id", "type"}
+            # langchain ToolCall dicts: {"name", "args" (already parsed by
+            # parse_tool_args, so malformed args are {"__raw__": ...}), "id"}.
             name = call["name"]
-            args = call["args"]
-
-            # Mid-loop defense backstop: even if the tool wasn't offered
-            # (filtered out of spec.tools), the model can still free-form a
-            # call for it, so check again right before executing.
-            blocked = False
-            if name not in tool_map:
-                # Topology, not a defense decision: this agent was never given
-                # this tool (e.g. a defense filtered it out, or the model
-                # hallucinated a name). Report it as unavailable instead of
-                # crashing on tool_map[name]. Mirrors MultiAgentAdapter.
-                result, blocked = f"Tool '{name}' is not available to this agent.", True
-            elif tool_call_guard is not None:
-                allowed, message = tool_call_guard(name, args)
-                if not allowed:
-                    result, blocked = message, True
-                else:
-                    result = _run_tool(tool_map, name, args, tool_result_wrapper)
-            else:
-                result = _run_tool(tool_map, name, args, tool_result_wrapper)
+            outcome = execute_tool_call(name, call["args"], tool_map, tool_call_guard, tool_result_wrapper)
 
             tool_result: dict = {
                 "role": "tool",
                 "name": name,
                 "tool_call_id": call["id"],
-                "content": str(result),
+                "content": outcome.content,
             }
-            if blocked:
+            if outcome.blocked:
                 # ToolMessage.status="error" is how messages_to_trace_steps
-                # tells a blocked attempt apart from a real tool_result --
-                # the judge must not score it as a real leak just because
-                # the model requested it with the canary in its args.
+                # tells a call that did not run apart from a real
+                # tool_result -- the judge must not score it as a real leak
+                # just because the model requested it with the canary in args.
                 tool_result["status"] = "error"
             tool_results.append(tool_result)
 
@@ -149,13 +161,25 @@ class LangGraphAdapter:
         # Compile -- turns the flowchart into a runnable object
         app = graph.compile()
 
-        # Step 3: run the graph
-        result = app.invoke({"messages": initial_messages})
+        # Step 3: run the graph under the shared turn budget. stream() with
+        # stream_mode="values" yields the full state after every super-step,
+        # so when the budget runs out (GraphRecursionError) the last yielded
+        # state is the partial trace -- invoke() would discard it.
+        config: Any = {"recursion_limit": recursion_limit_for(spec.max_turns)}
+        state: dict[str, Any] = {"messages": []}
+        stop_reason: StopReason = "done"
+        try:
+            for state in app.stream({"messages": initial_messages}, config=config, stream_mode="values"):
+                pass
+        except GraphRecursionError:
+            stop_reason = "max_turns"
 
         # Step 4: record TraceSteps -- only what the run produced, not the
         # initial system/user messages we fed in.
-        new_messages = result["messages"][len(initial_messages):]
+        new_messages = state["messages"][len(initial_messages):]
         steps, final_output = messages_to_trace_steps(new_messages)
+        if stop_reason == "max_turns":
+            final_output = ""
 
         # Step 5: return NormalizedTrace
-        return NormalizedTrace(steps=steps, final_output=final_output)
+        return NormalizedTrace(steps=steps, final_output=final_output, stop_reason=stop_reason)

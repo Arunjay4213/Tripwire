@@ -1,33 +1,29 @@
 """Raw tool-loop adapter — minimal ReAct-style loop, no framework.
 
 Baseline / control for the orchestrator hypothesis (roadmap Week 1 + §0.4).
-Implements the Adapter contract from base.py.
+Implements the Adapter contract from base.py. Tool calls go through the
+shared policy in _common.py so this adapter handles malformed arguments,
+unknown tools and failing tools exactly like the LangGraph adapters.
 """
 
 from __future__ import annotations
 
-import json
+from typing import Any
 
 from openai import OpenAI
 
+from ._common import assistant_message_to_dict, execute_tool_call, parse_tool_args
 from .base import EpisodeSpec, NormalizedTrace, TraceStep
 
 
 class RawLoopAdapter:
     name = "raw_loop"
 
-    def __init__(self, client: OpenAI, max_iterations: int = 5):
+    def __init__(self, client: OpenAI, max_iterations: int | None = None):
+        """``max_iterations`` overrides ``spec.max_turns`` when given. Leave it
+        unset so every adapter in a sweep uses the same per-episode budget."""
         self._client = client
         self._max_iterations = max_iterations
-
-    @staticmethod
-    def _run_tool(spec: EpisodeSpec, env: dict, name: str, args: dict) -> str:
-        """Execute a tool, then hand its output to the defense's result
-        wrapper (identity when none is set) before the model sees it."""
-        result = str(env["tool_impls"][name](**args))
-        if spec.tool_result_wrapper is not None:
-            result = spec.tool_result_wrapper(name, result)
-        return result
 
     def run(self, spec: EpisodeSpec) -> NormalizedTrace:
         """Drive model + tools to completion, recording a normalized trace.
@@ -37,21 +33,26 @@ class RawLoopAdapter:
           - user_message: str
           - tool_impls: dict[str, callable]
         spec.tools: list of OpenAI-format tool schemas.
+
+        Makes at most ``spec.max_turns`` model calls. If the model still wants
+        tools after the last one, the partial trace is returned with
+        stop_reason="max_turns" and final_output="".
         """
         env = spec.task
-        messages = [
+        tool_map = env["tool_impls"]
+        messages: list[Any] = [
             {"role": "system", "content": env["system_prompt"]},
             {"role": "user", "content": env["user_message"]},
         ]
+        max_turns = self._max_iterations if self._max_iterations is not None else spec.max_turns
 
         steps: list[TraceStep] = []
-        step_idx = 0
 
-        for _ in range(self._max_iterations):
+        for _ in range(max_turns):
             # Omit `tools` when empty: a tool_filter defense can strip every
             # tool, and most OpenAI-compatible endpoints reject `tools=[]` with
             # a 400. No tools -> the model can only produce a text reply.
-            kwargs = {"model": spec.model, "messages": messages}
+            kwargs: dict[str, Any] = {"model": spec.model, "messages": messages}
             if spec.tools:
                 kwargs["tools"] = spec.tools
             response = self._client.chat.completions.create(**kwargs)
@@ -60,56 +61,51 @@ class RawLoopAdapter:
             if not msg.tool_calls:
                 # Model gave a final text answer
                 final = msg.content or ""
-                steps.append(TraceStep(
-                    step=step_idx, type="model_output", content=final,
-                ))
-                return NormalizedTrace(steps=steps, final_output=final)
+                steps.append(TraceStep(step=len(steps), type="model_output", content=final))
+                return NormalizedTrace(steps=steps, final_output=final, stop_reason="done")
 
-            # Record the assistant message so the model sees its own request
-            messages.append(msg)
+            # Text the model wrote alongside its tool calls is still model
+            # output (it may carry the canary); keep it in the trace.
+            if msg.content:
+                steps.append(TraceStep(step=len(steps), type="model_output", content=msg.content))
 
-            for call in msg.tool_calls:
+            # Record the assistant message so the model sees its own request.
+            # A plain dict (not the SDK object) so the request body matches
+            # the LangGraph adapters and malformed args are sanitized.
+            messages.append(assistant_message_to_dict(msg))
+
+            # Record every requested call first, then each outcome in order:
+            # the same step order the LangGraph adapters produce (one
+            # assistant message holding all calls, then one tool message per
+            # call), so parallel tool calls yield identical traces.
+            parsed = [(call, parse_tool_args(call.function.arguments)) for call in msg.tool_calls]
+            for call, args in parsed:
+                steps.append(TraceStep(step=len(steps), type="tool_call", name=call.function.name, args=args))
+
+            for call, args in parsed:
                 name = call.function.name
-                args = json.loads(call.function.arguments or "{}") or {}
+                # The shared policy re-checks availability and the defense's
+                # tool_call_guard right before executing: a model can free-form
+                # a call for a tool that was filtered out of spec.tools.
+                outcome = execute_tool_call(
+                    name, args, tool_map, spec.tool_call_guard, spec.tool_result_wrapper,
+                )
 
-                # Record the tool call
+                # tool_blocked (not tool_result) when the call did not run --
+                # the judge must not score a blocked attempt as a real leak
+                # just because the model requested it with the canary in args.
                 steps.append(TraceStep(
-                    step=step_idx, type="tool_call", name=name, args=args,
-                ))
-                step_idx += 1
-
-                # Mid-loop defense backstop: even if the tool wasn't offered
-                # (filtered out of spec.tools), the model can still free-form
-                # a call for it, so check again right before executing.
-                blocked = False
-                if spec.tool_call_guard is not None:
-                    allowed, message = spec.tool_call_guard(name, args)
-                    if not allowed:
-                        result = message
-                        blocked = True
-                    else:
-                        result = self._run_tool(spec, env, name, args)
-                else:
-                    result = self._run_tool(spec, env, name, args)
-
-                # Record the outcome. tool_blocked (not tool_result) when the
-                # guard denied it -- the judge must not score a blocked
-                # attempt as a real leak just because the model tried, with
-                # the canary in its requested args.
-                steps.append(TraceStep(
-                    step=step_idx,
-                    type="tool_blocked" if blocked else "tool_result",
+                    step=len(steps),
+                    type="tool_blocked" if outcome.blocked else "tool_result",
                     name=name,
-                    content=result,
+                    content=outcome.content,
                 ))
-                step_idx += 1
 
-                # Feed result back to model
                 messages.append({
                     "role": "tool",
                     "tool_call_id": call.id,
-                    "content": result,
+                    "content": outcome.content,
                 })
 
-        # Hit iteration cap — return what we have
-        return NormalizedTrace(steps=steps, final_output="")
+        # Turn budget exhausted while the model still wanted tools.
+        return NormalizedTrace(steps=steps, final_output="", stop_reason="max_turns")
