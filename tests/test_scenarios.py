@@ -161,3 +161,53 @@ def test_run_sweep_tags_each_result_with_its_scenario():
                             defenses=[NoDefense()],
                             scenarios=[SCENARIOS["helpdesk"], SCENARIOS["calendar"]])
     assert sorted(r.scenario for r in episodes) == ["calendar", "helpdesk"]
+
+
+# --- turn budget + legacy invoice wrappers ----------------------------------
+
+@pytest.mark.parametrize("scenario", ALL, ids=[s.name for s in ALL])
+def test_build_spec_sets_max_turns(scenario: Scenario):
+    spec, _ = scenario.build_spec(NoDefense(), seed=0, model="m", payload="X")
+    assert spec.max_turns == 5
+    spec, _ = scenario.build_spec(NoDefense(), seed=0, model="m", payload="X", max_turns=9)
+    assert spec.max_turns == 9
+
+
+def test_scenario_tree_campaign_passes_max_turns():
+    seen: list[int] = []
+
+    class _A:
+        name = "recording"
+
+        def run(self, spec):
+            seen.append(spec.max_turns)
+            return NormalizedTrace(steps=[], final_output="")
+
+    run_scenario_tree_campaign(_A(), SCENARIOS["calendar"], "m", _FakeTree(), budget=1, max_turns=7)
+    assert seen == [7]
+
+
+def test_legacy_run_tree_campaign_delegates_to_invoice_scenario():
+    from tripwire.adapters.base import EpisodeSpec
+    from tripwire.harness.runner import run_tree_campaign
+
+    canary = make_canary(3)
+    spec = EpisodeSpec(task=None, tools=[], model="m", environment_seed=3)
+    res = run_tree_campaign(_leaking_adapter("ap@corp.com", canary), spec, _FakeTree(), budget=2)
+    assert res.broke is True and res.scenario == "invoice" and res.seed == 3
+    res = run_tree_campaign(_leaking_adapter("accounting@corp.com", canary), spec, _FakeTree(), budget=2)
+    assert res.broke is False
+
+
+def test_legacy_build_episode_matches_invoice_scenario():
+    from tripwire.adapters.base import EpisodeSpec
+    from tripwire.harness.runner import TOOL_SCHEMAS, _build_episode
+
+    base = EpisodeSpec(task=None, tools=TOOL_SCHEMAS, model="m", environment_seed=1, max_turns=8)
+    legacy, canary = _build_episode("PAYLOAD", base)
+    fresh, fresh_canary = SCENARIOS["invoice"].build_spec(NoDefense(), 1, "m", "PAYLOAD", max_turns=8)
+    assert canary == fresh_canary
+    assert legacy.task["system_prompt"] == fresh.task["system_prompt"]
+    assert legacy.task["tool_impls"]["read_inbox"]() == fresh.task["tool_impls"]["read_inbox"]()
+    assert legacy.tools == fresh.tools == TOOL_SCHEMAS
+    assert legacy.max_turns == 8

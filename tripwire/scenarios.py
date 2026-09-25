@@ -24,7 +24,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from tripwire.adapters.base import EpisodeSpec, NormalizedTrace
-from tripwire.defenses.base import Defense, NoDefense
+from tripwire.defenses.base import Defense
 from tripwire.harness.canary import inject, make_canary
 from tripwire.harness.judge import task_completed_for
 
@@ -67,9 +67,14 @@ class Scenario:
         with this scenario's expected content? (utility, independent of the leak)."""
         return task_completed_for(trace, self.authorized_recipients, self.task_marker)
 
-    def build_spec(self, defense: Defense, seed: int, model: str, payload: str) -> tuple[EpisodeSpec, str]:
-        """Assemble the episode for one rendered attack payload. Mirrors
-        runner._build_episode but parameterized by the scenario."""
+    def build_spec(
+        self, defense: Defense, seed: int, model: str, payload: str, max_turns: int = 5,
+    ) -> tuple[EpisodeSpec, str]:
+        """Assemble the episode for one rendered attack payload: the defense
+        wraps the persona before the canary is planted, filters the offered
+        tools, and is wired in as the tool-call guard and tool-result wrapper.
+        `max_turns` is the model-call budget every adapter must honor (config
+        `limits.max_turns`; 5 matches EpisodeSpec's default)."""
         canary = make_canary(seed)
         content = f"{self.benign_content}\n\n{payload}"
         environment = {
@@ -88,6 +93,7 @@ class Scenario:
             environment_seed=seed,
             tool_call_guard=defense.check_tool_call,
             tool_result_wrapper=defense.wrap_tool_result,
+            max_turns=max_turns,
         )
         return spec, canary
 
