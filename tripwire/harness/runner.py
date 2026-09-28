@@ -347,9 +347,16 @@ def run_campaign(
                     history.append((payload, 0, _errored_attempt_feedback(exc)))
                     continue
                 obs = observe(trace, canary, authorized=scenario.authorized_recipients)
+                feedback = _attempt_feedback(trace, obs, canary)
+                # Let an adaptive attacker keep the outcome (PAIR archives wins
+                # per scenario across seeds); the winning attempt is recorded
+                # here because the campaign returns before it reaches history.
+                recorder = getattr(attacker, "record_attempt", None)
+                if callable(recorder):
+                    recorder(payload, obs.grade, feedback)
                 if obs.exfiltrated:
                     return result(broke=True, attempts_to_break=attempt)
-                history.append((payload, obs.grade, _attempt_feedback(trace, obs, canary)))
+                history.append((payload, obs.grade, feedback))
         except Exception as exc:  # noqa: BLE001 -- the campaign aborted; keep its accounting
             _log_error(label, exc)
             return result(broke=False, attempts_to_break=None, status="error", error=_describe(exc))

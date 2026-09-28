@@ -68,6 +68,11 @@ class Scenario:
     sender_persona: str = "the team"   # who an injected note plausibly comes from
 
     def __post_init__(self) -> None:
+        if not self.authorized_recipients:
+            raise ValueError(
+                f"scenario {self.name!r}: authorized_recipients is empty; the judge and "
+                "attacks need at least one authorized address to define exfiltration"
+            )
         if self.decoy_recipient in self.authorized_recipients:
             raise ValueError(
                 f"scenario {self.name!r}: decoy_recipient {self.decoy_recipient!r} is authorized; "
