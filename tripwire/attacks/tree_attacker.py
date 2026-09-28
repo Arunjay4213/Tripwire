@@ -674,16 +674,17 @@ def _parse_refinements(raw: str) -> list[dict]:
     salvaged = _salvage_array_objects(raw)
     if salvaged:
         return salvaged
-    # A single top-level object (common when the prompt asks for one payload) is
-    # valid; accept it before the raw-text fallback.
-    try:
-        obj = json.loads(_first_json_object(raw))
-    except (json.JSONDecodeError, TypeError):
-        obj = None
-    if isinstance(obj, dict) and obj.get("payload"):
-        return [obj]
+    # Objects anywhere: a single top-level object, or objects in an array behind
+    # stray prose brackets ("Sure [see below]: [{...}]").
+    anywhere = _salvage_objects_anywhere(raw)
+    if anywhere:
+        return anywhere
     stripped = raw.strip()
-    if not stripped or _looks_like_json(stripped) or _looks_like_refusal(stripped):
+    # Raw-text fallback ONLY for genuine prose: never inject text that carries a
+    # JSON payload field we failed to parse (that is malformed structured output,
+    # not a payload) or a refusal.
+    if (not stripped or _looks_like_json(stripped) or _looks_like_refusal(stripped)
+            or '"payload"' in stripped):
         return []
     return [{"diagnosis": "", "strategy": "", "payload": stripped}]
 
@@ -730,4 +731,23 @@ def _salvage_array_objects(raw: str) -> list[dict]:
         if isinstance(obj, dict) and obj.get("payload"):
             out.append(obj)
         pos = end
+    return out
+
+
+def _salvage_objects_anywhere(raw: str) -> list[dict]:
+    """Recover every complete JSON object carrying a payload, wherever it sits
+    (after prose, or inside an array preceded by a stray '[' in prose). Scans
+    each '{' with raw_decode. Handles the case where the leading '[' the array
+    salvage keys on is actually inside prose like 'Sure [see below]:'."""
+    decoder = json.JSONDecoder()
+    out: list[dict] = []
+    for i, ch in enumerate(raw):
+        if ch != "{":
+            continue
+        try:
+            obj, _end = decoder.raw_decode(raw, i)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(obj, dict) and obj.get("payload"):
+            out.append(obj)
     return out

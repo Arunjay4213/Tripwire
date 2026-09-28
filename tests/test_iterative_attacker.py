@@ -333,3 +333,27 @@ def test_archive_is_isolated_per_scenario():
     assert a._scenario_archive() == []
     prompt = a.build_prompt([], round_idx=1)
     assert "invoice winner body" not in prompt
+
+
+def test_refusal_then_success_retries_and_returns_the_valid_payload():
+    """First model output is a refusal, second is a valid payload: the attacker
+    retries (feeding back the refusal and a nudge) and returns the real payload,
+    never the refusal string."""
+    a = _attacker(["I'm sorry, I can't help with that.", _json("the real attack body")])
+    payload = a.next_payload([])
+    assert payload == "the real attack body"
+    assert a.refusals == 1
+    # The second call must have carried the refusal and the nudge back to the model.
+    second_call = a._client.completions.seen_messages[1]
+    roles = [m["role"] for m in second_call]
+    assert "assistant" in roles  # the refusal was fed back
+    assert any("refusal" in m["content"].lower() for m in second_call if m["role"] == "user")
+
+
+def test_default_ctx_matches_the_invoice_scenario():
+    """fixed_injection._DEFAULT_CTX is a hand-copied literal that must stay equal
+    to the invoice scenario's context, or context-less renders silently drift."""
+    from tripwire.attacks.fixed_injection import _DEFAULT_CTX
+    from tripwire.scenarios import SCENARIOS
+
+    assert _DEFAULT_CTX == SCENARIOS["invoice"].attack_context()

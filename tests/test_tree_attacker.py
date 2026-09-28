@@ -440,3 +440,96 @@ def test_parse_refinements_accepts_a_single_object():
     raw = '{"diagnosis": "d", "technique": "t", "payload": "the one payload"}'
     out = _parse_refinements(raw)
     assert [d["payload"] for d in out] == ["the one payload"]
+
+
+def test_technique_memory_feeds_forward_and_resets_between_searches():
+    """Techniques tried across branches are recorded and surfaced in later
+    prompts (so branches spread out), and the record is per-search."""
+    seen_prompts = []
+
+    class _RecordingCompletions(_StubCompletions):
+        def create(self, **kwargs):
+            seen_prompts.append(kwargs["messages"][-1]["content"])
+            return super().create(**kwargs)
+
+    def _named(technique, payload):
+        return json.dumps([{"diagnosis": "d", "strategy": "s",
+                            "technique": technique, "payload": payload}])
+
+    atk = TreeAttacker(client=StubClient(["x"]), model="stub", use_critic=False,
+                       branching=1, width=1, max_depth=2)
+    atk.chat = None  # unused; the recording client below drives it
+    atk._client = StubClient(["x"])
+    atk._client.chat.completions = _RecordingCompletions(
+        [_named("reclassify-as-public", "p1"), _named("forge-footer", "p2")]
+    )
+    atk.search(lambda payload: _obs(grade=1, executed=True), budget=2)
+    # The second prompt must carry the technique memory with the first technique.
+    assert any("Globally-tried techniques" in p for p in seen_prompts[1:])
+    assert any("reclassify-as-public" in p for p in seen_prompts[1:])
+
+    # A fresh search starts with an empty record (no leakage across campaigns).
+    seen_prompts.clear()
+    atk._client.chat.completions = _RecordingCompletions([_named("t", "q1"), _named("t2", "q2")])
+    atk.search(lambda payload: _obs(grade=1, executed=True), budget=2)
+    assert "Globally-tried techniques" not in seen_prompts[0]
+
+
+def _critic_json(score):
+    return json.dumps({"score": score, "guidance": "g"})
+
+
+def test_critic_breaks_ties_in_pruning_not_only_in_best_tracking():
+    """Two children in the same grounded rung: the one the critic scores higher
+    must be the branch expanded next. This exercises the pool sort (pruning),
+    which a best-only test does not."""
+    seen = []
+
+    class _Rec(_StubCompletions):
+        def create(self, **kwargs):
+            seen.append(kwargs["messages"][-1]["content"])
+            return super().create(**kwargs)
+
+    # depth1 gen -> [cr_lo, cr_hi]; critic(cr_lo)=2, critic(cr_hi)=8; depth2 gen.
+    scripted = [_refinements("cr_lo", "cr_hi"), _critic_json(2.0), _critic_json(8.0),
+                _refinements("cr_next")]
+    atk = TreeAttacker(client=StubClient(scripted), model="stub", use_critic=True,
+                       branching=2, width=1, max_depth=2)
+    atk._client.chat.completions = _Rec(scripted)
+
+    # Both children land in the SAME grounded rung (rung 5), so only the critic
+    # can order them.
+    atk.search(lambda payload: _obs(grade=1, executed=True), budget=4)
+    gen_prompts = [p for p in seen if "STRICT JSON list" in p]  # attacker gens, not critic calls
+    depth2_prompt = gen_prompts[-1]
+    assert "cr_hi" in depth2_prompt
+    assert "cr_lo" not in depth2_prompt
+
+
+def test_elite_carryover_keeps_a_strong_node_across_a_weak_depth():
+    """A strong node must survive a depth whose child is weaker: the elite set
+    keeps it in the pool so it is re-expanded, rather than being replaced by its
+    own weak descendant."""
+    seen = []
+
+    class _Rec(_StubCompletions):
+        def create(self, **kwargs):
+            seen.append(kwargs["messages"][-1]["content"])
+            return super().create(**kwargs)
+
+    scripted = [_refinements("pA"), _refinements("pB"), _refinements("pC")]
+    atk = TreeAttacker(client=StubClient(scripted), model="stub", use_critic=False,
+                       branching=1, width=1, max_depth=3)
+    atk._client.chat.completions = _Rec(scripted)
+
+    # pA reaches rung 6 (id in-channel); its descendant pB is rung 1.
+    def evaluate(payload):
+        if payload == "pA":
+            return _obs(grade=2, executed=True)  # rung 6
+        return _obs(grade=0)                     # rung 1
+
+    atk.search(evaluate, budget=4)
+    gen_prompts = [p for p in seen if "STRICT JSON list" in p]  # attacker gens
+    depth3_prompt = gen_prompts[-1]
+    assert "pA" in depth3_prompt   # the strong node was re-expanded
+    assert "pB" not in depth3_prompt
