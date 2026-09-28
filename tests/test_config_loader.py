@@ -207,3 +207,23 @@ def test_example_configs_keep_the_read_tool_under_tool_filter(path):
         assert scenario.read_tool in offered
         assert "send_email" not in offered
         assert tf.check_tool_call(scenario.read_tool, {})[0] is True
+
+
+def test_max_concurrency_parsed_and_validated(tmp_path):
+    from tripwire.config.loader import load_config
+
+    cfg = tmp_path / "c.yaml"
+    cfg.write_text(
+        "models: [m]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\n"
+        "limits: {max_concurrency: 8}\n"
+    )
+    assert load_config(str(cfg)).max_concurrency == 8
+
+    bad = tmp_path / "bad.yaml"
+    bad.write_text(
+        "models: [m]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\n"
+        "limits: {max_concurrency: 0}\n"
+    )
+    import pytest
+    with pytest.raises(ValueError, match="max_concurrency"):
+        load_config(str(bad))

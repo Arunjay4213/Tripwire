@@ -210,6 +210,10 @@ def main() -> None:
     parser.add_argument("--config", required=True, help="Path to threat_model.yaml (see `tripwire init`)")
     parser.add_argument("--output", default="results/results.json", help="Output JSON path")
     parser.add_argument("--smoke", action="store_true", help="Tiny run: 1 seed, first model/scenario/attack/defense")
+    parser.add_argument("--concurrency", type=int, default=None,
+                        help="Parallel cells (adapter x model x scenario x attack x defense). "
+                             "Overrides limits.max_concurrency. The sweep is I/O-bound on the "
+                             "provider, so >1 cuts wall-clock roughly in proportion.")
     parser.add_argument(
         "--agent",
         metavar="PATH",
@@ -276,9 +280,13 @@ def main() -> None:
           f"x {len(config.defenses)} defense(s) x {len(config.seeds)} seed(s), "
           f"max {config.max_turns} turn(s) per episode")
 
+    concurrency = args.concurrency if args.concurrency is not None else config.max_concurrency
+    if concurrency > 1:
+        print(f"Concurrency: {concurrency} cells in parallel")
     episodes, campaigns = run_sweep(
         adapters, config.models, attacks, config.seeds, config.campaign_budget,
         config.defenses, config.scenarios, max_turns=config.max_turns,
+        concurrency=concurrency,
     )
 
     # Ensure output directory exists

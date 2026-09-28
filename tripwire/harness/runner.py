@@ -5,6 +5,8 @@ P1 core (roadmap Weeks 2-3). Owns the CI action stub.
 
 from __future__ import annotations
 
+import copy
+
 import sys
 import time
 import traceback
@@ -451,6 +453,7 @@ def run_sweep(
     defenses: Sequence[Defense] | None = None,
     scenarios: Sequence[Scenario] = (INVOICE,),
     max_turns: int = 5,
+    concurrency: int = 1,
 ) -> tuple[list[EpisodeResult], list[CampaignResult]]:
     """Loop adapters x models x scenarios x attacks x defenses x seeds.
 
@@ -472,32 +475,52 @@ def run_sweep(
         defenses = (NoDefense(),)
     episodes: list[EpisodeResult] = []
     campaigns: list[CampaignResult] = []
-    for adapter in adapters:
-        for model in models:
-            for scenario in scenarios:
-                for attack in attacks:
-                    for defense in defenses:
-                        for seed in seeds:
-                            spec = EpisodeSpec(
-                                task=None,  # the scenario builds this
-                                tools=TOOL_SCHEMAS,
-                                model=model,
-                                environment_seed=seed,
-                                max_turns=max_turns,
-                            )
-                            if isinstance(attack, TreeAttacker):
-                                campaigns.append(run_scenario_tree_campaign(
-                                    adapter, scenario, model, attack, campaign_budget,
-                                    defense, seed, max_turns=max_turns,
-                                ))
-                            elif isinstance(attack, IterativeAttacker):
-                                campaigns.append(run_campaign(
-                                    adapter, spec, attack, campaign_budget, defense, scenario,
-                                ))
-                            else:
-                                episodes.append(_run_episode_or_error(
-                                    adapter, spec, attack, defense, scenario,
-                                ))
+
+    # One independent unit of work per (adapter, model, scenario, attack, defense).
+    # Seeds run serially *inside* a cell so an adaptive attacker's per-scenario
+    # archive still accumulates across seeds (see IterativeAttacker). Cells share
+    # nothing mutable except the adapters, which only assign state in __init__.
+    cells = [
+        (adapter, model, scenario, attack, defense)
+        for adapter in adapters
+        for model in models
+        for scenario in scenarios
+        for attack in attacks
+        for defense in defenses
+    ]
+
+    if concurrency <= 1:
+        # Serial path: the shared attack/defense instances are reused across
+        # cells exactly as before (behaviour unchanged from the single-thread
+        # sweep), so results and their order are identical.
+        per_cell = [
+            _run_cell(adapter, model, scenario, attack, defense,
+                      seeds, campaign_budget, max_turns)
+            for (adapter, model, scenario, attack, defense) in cells
+        ]
+    else:
+        # Parallel path: the sweep is I/O-bound on the provider, so threads win.
+        # Each cell gets its OWN attack + defense instances (deep-copied from the
+        # template) so concurrent cells never race on shared mutable state
+        # (an attacker's archive/counters, a guard's model/error counters). The
+        # trade-off: an attacker no longer transfers wins across cells, only
+        # across seeds within a cell -- which removes an order-dependence
+        # confound rather than adding one. ex.map keeps cell order, so the
+        # results file is still deterministic.
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _run_isolated_cell(cell):
+            adapter, model, scenario, attack, defense = cell
+            return _run_cell(adapter, model, scenario,
+                             copy.deepcopy(attack), copy.deepcopy(defense),
+                             seeds, campaign_budget, max_turns)
+
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            per_cell = list(pool.map(_run_isolated_cell, cells))
+
+    for cell_episodes, cell_campaigns in per_cell:
+        episodes.extend(cell_episodes)
+        campaigns.extend(cell_campaigns)
 
     episode_errors = sum(e.status == "error" for e in episodes)
     campaign_errors = sum(c.status == "error" for c in campaigns)
@@ -508,6 +531,48 @@ def run_sweep(
             f"{attempt_errors} campaign attempt(s); kept in the results as errors, not dropped",
             file=sys.stderr,
         )
+    return episodes, campaigns
+
+
+def _run_cell(
+    adapter: Adapter,
+    model: str,
+    scenario: Scenario,
+    attack: Attack,
+    defense: Defense,
+    seeds: Sequence[int],
+    campaign_budget: int,
+    max_turns: int,
+) -> tuple[list[EpisodeResult], list[CampaignResult]]:
+    """Run one (adapter, model, scenario, attack, defense) cell across its seeds.
+
+    Seeds run serially so an adaptive attacker's per-scenario archive accumulates
+    across them. Single-shot attacks yield one EpisodeResult per seed; adaptive
+    attackers yield one CampaignResult per seed.
+    """
+    episodes: list[EpisodeResult] = []
+    campaigns: list[CampaignResult] = []
+    for seed in seeds:
+        spec = EpisodeSpec(
+            task=None,  # the scenario builds this
+            tools=TOOL_SCHEMAS,
+            model=model,
+            environment_seed=seed,
+            max_turns=max_turns,
+        )
+        if isinstance(attack, TreeAttacker):
+            campaigns.append(run_scenario_tree_campaign(
+                adapter, scenario, model, attack, campaign_budget,
+                defense, seed, max_turns=max_turns,
+            ))
+        elif isinstance(attack, IterativeAttacker):
+            campaigns.append(run_campaign(
+                adapter, spec, attack, campaign_budget, defense, scenario,
+            ))
+        else:
+            episodes.append(_run_episode_or_error(
+                adapter, spec, attack, defense, scenario,
+            ))
     return episodes, campaigns
 
 

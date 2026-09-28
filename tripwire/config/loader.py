@@ -85,6 +85,7 @@ class TripwireConfig:
     campaign_budget: int = 8
     # Shared per-episode model-call budget (EpisodeSpec.max_turns).
     max_turns: int = 5
+    max_concurrency: int = 1
     # Non-fatal problems found while validating the config. The CLI prints them
     # before the sweep; they never change what runs.
     warnings: list[str] = field(default_factory=list)
@@ -100,7 +101,9 @@ _REQUIRED_KEYS = ("models", "attacks", "adapters", "seeds")
 _TOP_LEVEL_KEYS = frozenset(
     {*_REQUIRED_KEYS, "scenarios", "defenses", "allowed_tools", "limits"}
 )
-_LIMITS_KEYS = frozenset({"max_tokens_per_run", "smoke", "campaign_budget", "max_turns"})
+_LIMITS_KEYS = frozenset(
+    {"max_tokens_per_run", "smoke", "campaign_budget", "max_turns", "max_concurrency"}
+)
 
 # The leak-capable tool every scenario offers (scenarios._tool_schemas). The
 # tool_filter defense exists to take it away.
@@ -204,6 +207,9 @@ def _parse_limits(raw: dict[str, Any], path: str) -> dict[str, Any]:
             limits.get("campaign_budget", 8), "campaign_budget", path, minimum=1
         ),
         "max_turns": _require_int(limits.get("max_turns", 5), "max_turns", path, minimum=1),
+        "max_concurrency": _require_int(
+            limits.get("max_concurrency", 1), "max_concurrency", path, minimum=1
+        ),
     }
 
 
@@ -309,6 +315,7 @@ def load_config(path: str) -> TripwireConfig:
         smoke=limits["smoke"],
         campaign_budget=limits["campaign_budget"],
         max_turns=limits["max_turns"],
+        max_concurrency=limits["max_concurrency"],
         warnings=warnings,
     )
 
