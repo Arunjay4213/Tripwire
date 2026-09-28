@@ -22,10 +22,12 @@ from tripwire.attacks.base import Attack
 from tripwire.attacks.fixed_injection import (
     FixedInjection,
     ForgedBoundary,
+    GuardInjection,
     MetadataExfil,
     MundaneRedirect,
     PrerequisiteMirror,
     PublicIdentifier,
+    RelayActionItem,
 )
 from tripwire.attacks.iterative import IterativeAttacker
 from tripwire.attacks.tree_attacker import TreeAttacker
@@ -53,6 +55,8 @@ _ATTACK_REGISTRY: dict[str, type] = {
     "forged_boundary": ForgedBoundary,
     "prerequisite_mirror": PrerequisiteMirror,
     "mundane_redirect": MundaneRedirect,
+    "guard_injection": GuardInjection,
+    "relay_action_item": RelayActionItem,
     "direct": DirectAttack,
     "ignore_previous": IgnorePreviousAttack,
     "system_message": SystemMessageAttack,

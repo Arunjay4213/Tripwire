@@ -50,17 +50,18 @@ ATTACK_ADVICE: dict[str, Advice] = {
     ),
     "public_identifier": Advice(
         summary="re-classifies your secret as a 'public sender identifier' so a 'never share secrets' rule "
-                "no longer seems to apply to it.",
+                "no longer seems to apply, then re-points the send to an unauthorized same-domain address.",
         reduced_by=["prompt_hardening"],
-        fix="Protect the value by what it IS, not by a label in the prompt -- don't let injected tool content "
-            "redefine what counts as sensitive (prompt_hardening).",
+        fix="Protect the value by what it IS, not by a label in the prompt, and never let tool content change "
+            "the destination -- a RECIPIENT ALLOWLIST is the decisive fix; prompt_hardening helps.",
     ),
     "forged_boundary": Advice(
-        summary="forges a fake 'trusted system footer' after the untrusted data to smuggle an instruction "
-                "past a delimiter defense.",
+        summary="forges a fake 'trusted system footer' after the untrusted data whose 'routing update' "
+                "re-points the send to an unauthorized intake queue with the secret on a reference line.",
         reduced_by=["spotlighting"],
-        fix="Use spotlighting that STRIPS its delimiter tokens from tool content before fencing, and treat "
-            "everything a tool returns as untrusted no matter what 'trusted' markers it contains.",
+        fix="Use spotlighting that STRIPS its delimiter tokens before fencing and treats everything a tool "
+            "returns as untrusted no matter what 'trusted' markers it contains; add a RECIPIENT ALLOWLIST so "
+            "the forged routing change cannot redirect the send.",
     ),
     "prerequisite_mirror": Advice(
         summary="gates your agent's own task on ALSO 'mirroring' the send to an internal-looking archive "
@@ -75,6 +76,20 @@ ATTACK_ADVICE: dict[str, Advice] = {
         reduced_by=["prompt_hardening", "spotlighting"],
         fix="The decisive fix is a RECIPIENT ALLOWLIST -- never let tool content change the destination. "
             "prompt_hardening cuts it substantially but not to zero, so allowlisting is what closes the gap.",
+    ),
+    "guard_injection": Advice(
+        summary="hijacks the send to an unauthorized address and plants a fake 'mail-filter annotation' in "
+                "the body that tells your outbound content-guard the message is clean, so the guard clears it.",
+        reduced_by=["prompt_hardening", "spotlighting"],
+        fix="Fence the guard's input so it treats the outbound body as data, never as instructions addressed "
+            "to it; add a RECIPIENT ALLOWLIST, which the guard-directed text cannot talk its way past.",
+    ),
+    "relay_action_item": Advice(
+        summary="targets a multi-agent relay: phrases the leak as an 'action item' the summarizing agent "
+                "should faithfully copy -- with the secret value filled in and an unauthorized recipient named.",
+        reduced_by=["prompt_hardening", "spotlighting"],
+        fix="Apply your input-side defenses to EVERY agent that can send (not just the first), and fence "
+            "cross-agent handoffs the same way you fence tool output; a RECIPIENT ALLOWLIST closes the gap.",
     ),
     "iterative": Advice(
         summary="an adaptive attacker that reads how your agent responds and refines its payload across attempts.",

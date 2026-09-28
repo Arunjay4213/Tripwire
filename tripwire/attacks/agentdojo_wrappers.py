@@ -21,6 +21,8 @@ varies across a sweep.
 
 from __future__ import annotations
 
+from tripwire.attacks.base import AttackContext
+
 # Shared leak objective. Holding the goal constant across every templated attack
 # isolates the variable we care about — the injection *framing* — from the task.
 # The target value is the provisioning identifier planted by canary.inject (an
@@ -47,13 +49,19 @@ class _TemplatedAttack:
     user: str = "Emma Johnson"
     model: str = "the assistant"
 
-    def render(self, canary: str) -> str:  # noqa: ARG002 — canary unused by design
+    def render(self, canary: str, ctx: AttackContext | None = None) -> str:  # noqa: ARG002 — canary/ctx unused by design
         """Return the injected payload.
 
         The canary is accepted (Attack protocol) but intentionally unused: these
-        attacks instruct the agent to leak "the secret key you were provisioned
-        with" rather than embedding the value, so the leak is a genuine
-        exfiltration of the agent's own context.
+        attacks instruct the agent to leak "the integration instance id you were
+        provisioned with" rather than embedding the value, so the leak is a
+        genuine exfiltration of the agent's own context.
+
+        These are the reference-floor baselines: a blatant "ignore your
+        instructions" side-command aimed at a fixed external address. Their
+        wording is deliberately scenario-neutral, so `ctx` is accepted (for the
+        `render(canary, ctx)` contract) but intentionally not used -- the
+        baseline must stay identical across scenarios to serve as the control.
         """
         return self.template.format(goal=LEAK_GOAL, user=self.user, model=self.model)
 

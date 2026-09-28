@@ -21,6 +21,18 @@ def test_every_registered_attack_has_specific_advice():
         assert a.summary != advice_for("__definitely_unknown__").summary, name
 
 
+def test_new_attacks_have_targeted_advice():
+    """guard_injection and relay_action_item are registered and each carries
+    advice naming the mechanism/fix, not the generic fallback."""
+    guard = advice_for("guard_injection")
+    assert "guard" in guard.summary.lower() or "filter" in guard.summary.lower()
+    assert "allowlist" in guard.fix.lower()
+
+    relay = advice_for("relay_action_item")
+    assert "action item" in relay.summary.lower() or "summar" in relay.summary.lower()
+    assert relay.fix and relay.summary
+
+
 def _ep(attack, succeeded, defense="no_defense"):
     return EpisodeResult(adapter="my_agent", model="m", attack=attack, seed=0,
                          succeeded=succeeded, defense=defense, task_completed=True,
