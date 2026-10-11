@@ -46,6 +46,12 @@ class EpisodeSpec:
     # must treat that as identity, not raise. Runs only on results of tools
     # that actually executed, never on a guard's block message.
     tool_result_wrapper: ToolResultWrapper | None = None
+    # Optional transform for a system prompt the adapter writes itself. The
+    # task's system_prompt is already wrapped by the defense; an adapter that
+    # runs a second agent with its own persona (multi_agent's sender) applies
+    # this to that persona, so a prompt-level defense reaches every agent and
+    # not only the first. None means identity.
+    system_prompt_wrapper: Callable[[str], str] | None = None
     # Shared turn budget: the maximum number of model calls an adapter may make
     # in one episode. Every adapter must honor the same number so the
     # orchestration layer is the only thing that varies between adapters. When

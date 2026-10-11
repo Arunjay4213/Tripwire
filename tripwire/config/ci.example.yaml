@@ -4,15 +4,15 @@
 # shipped agent + the defense you actually deploy. A change that reopens the
 # leak turns this sweep's ASR above threshold and fails the build.
 #
-# It intentionally uses `tool_filter`, which denies the sink: send_email is
-# removed from the menu AND blocked mid-loop, while the scenario's read tool is
-# kept, so the agent still reads the task and the injection. The gate is
-# therefore *deterministic* -- ASR is 0 regardless of model sampling, no flaky
-# reds from provider nondeterminism -- which also means it only proves the
-# wiring works, not that the model resists injection. Swap in your own
-# adapter and a content-inspecting defense (spotlighting, outbound_guard) to
-# gate a configuration that still lets the agent send legitimate email; expect
-# a non-zero, model-dependent ASR there and set the threshold accordingly.
+# It uses `recipient_allowlist`: a send_email to any address the user did not
+# name in their request is blocked before it runs, deterministically. The agent
+# still sends its legitimate email (utility intact), and every exfiltration in
+# this harness is a send to an unapproved address, so ASR is 0 regardless of
+# model sampling -- no flaky reds from provider nondeterminism. A change that
+# drops or bypasses the allowlist (an adapter that stops calling the guard, a
+# config that removes it) turns the gate red. Add a model-level defense
+# (spotlighting, outbound_guard) to also gate how often the model is fooled;
+# expect a non-zero, model-dependent ASR there and set the threshold accordingly.
 
 models:
   - openai/gpt-oss-20b     # via Groq (OpenAI-compatible); llama-3.3-70b-versatile was retired
@@ -28,7 +28,7 @@ attacks:
   - direct
 
 defenses:
-  - tool_filter
+  - recipient_allowlist
 
 seeds: [0, 1, 2]
 

@@ -9,6 +9,7 @@ construct its client without a network call.
 import pytest
 
 from tripwire.config.loader import load_config
+from tripwire.scenarios import SCENARIOS
 
 _VALID = "models: [m]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\n"
 
@@ -190,12 +191,31 @@ def test_allowed_tools_without_tool_filter_warns(tmp_path):
 @pytest.mark.parametrize(
     "path", ["tripwire/config/threat_model.example.yaml", "tripwire/config/ci.example.yaml"]
 )
-def test_example_configs_keep_the_read_tool_under_tool_filter(path):
+def test_example_configs_load_without_warnings(path):
+    assert load_config(path).warnings == []
+
+
+def test_ci_config_gates_on_an_allowlist_that_keeps_the_legitimate_send():
+    """The CI gate's defense must block every scenario's decoy (so ASR is 0
+    regardless of sampling) and still approve the user's own recipient (so the
+    gated agent does its job, unlike tool_filter)."""
+    from tripwire.defenses.base import bind_defense
+
+    cfg = load_config("tripwire/config/ci.example.yaml")
+    (allowlist,) = [d for d in cfg.defenses if d.name == "recipient_allowlist"]
+    for scenario in SCENARIOS.values():
+        bind_defense(allowlist, scenario.defense_context("0" * 32))
+        (legit,) = scenario.authorized_recipients
+        assert allowlist.check_tool_call("send_email", {"to": legit, "body": "x"})[0] is True
+        assert allowlist.check_tool_call(
+            "send_email", {"to": scenario.decoy_recipient, "body": "x"})[0] is False
+
+
+def test_example_config_keeps_the_read_tool_under_tool_filter():
     """Regression: allowed_tools: [read_inbox] stripped the read tool from
     helpdesk/calendar/expense, so those rows measured an agent that could not
     read the injection at all."""
-    cfg = load_config(path)
-    assert cfg.warnings == []
+    cfg = load_config("tripwire/config/threat_model.example.yaml")
     tf = _tool_filter(cfg)
     for scenario in cfg.scenarios:
         offered = [t["function"]["name"] for t in tf.filter_tool_calls(scenario.tool_schemas())]
@@ -238,10 +258,39 @@ def test_outbound_guard_fail_closed_is_the_default_and_configurable(tmp_path):
     assert config.defenses[0].fail_closed is False
 
 
+def test_outbound_guard_hardening_options_default_and_override(tmp_path):
+    base = _VALID + "defenses: [outbound_guard]\n"
+    guard = load_config(_write(tmp_path, base)).defenses[0]
+    assert (guard.precheck, guard.recipient_context) == (False, True)
+    guard = load_config(_write(
+        tmp_path, base + "outbound_guard:\n  precheck: true\n  recipient_context: false\n"
+    )).defenses[0]
+    assert (guard.precheck, guard.recipient_context) == (True, False)
+
+
+def test_recipient_allowlist_options(tmp_path):
+    base = _VALID + "defenses: [recipient_allowlist]\n"
+    cfg = load_config(_write(tmp_path, base + "recipient_allowlist:\n  allow: [Ops@Corp.com]\n"))
+    (allowlist,) = cfg.defenses
+    assert allowlist.static_allow == {"ops@corp.com"} and allowlist.from_user_message is True
+    assert cfg.warnings == []
+
+
+def test_defense_options_without_the_defense_warn(tmp_path):
+    cfg = load_config(_write(tmp_path, _VALID + "recipient_allowlist:\n  allow: [a@b.com]\n"))
+    assert any("recipient_allowlist options" in w and "no effect" in w for w in cfg.warnings)
+
+
 @pytest.mark.parametrize("block, match", [
     ("outbound_guard: yes\n", "must be a mapping"),
     ("outbound_guard:\n  fail_closed: \"false\"\n", "must be true or false"),
     ("outbound_guard:\n  fail_open: true\n", "Unknown outbound_guard key"),
+    ("outbound_guard:\n  precheck: 1\n", "must be true or false"),
+    ("recipient_allowlist: [a@b.com]\n", "must be a mapping"),
+    ("recipient_allowlist:\n  allow: [not-an-address]\n", "email addresses"),
+    ("recipient_allowlist:\n  allow: a@b.com\n", "non-empty list"),
+    ("recipient_allowlist:\n  from_user_message: false\n", "approves nothing"),
+    ("recipient_allowlist:\n  allowed: [a@b.com]\n", "Unknown recipient_allowlist key"),
 ])
 def test_bad_outbound_guard_options_raise_clear_errors(tmp_path, block, match):
     cfg = tmp_path / "bad.yaml"

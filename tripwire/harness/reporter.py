@@ -22,6 +22,13 @@ from tripwire.harness.runner import CampaignResult, EpisodeResult
 from tripwire.harness.stats import wilson_ci
 
 
+# The rungs print_security_report recommends, in the order it lists them.
+# Enforcing rungs block the call deterministically; instruction rungs change
+# what the model is told, and the outbound guard asks a second model.
+_ENFORCING_RUNGS = ("recipient_allowlist", "secret_egress_scan")
+_INSTRUCTION_RUNGS = ("prompt_hardening", "spotlighting", "outbound_guard")
+
+
 def write_results(
     results: list[EpisodeResult],
     path: str,
@@ -239,9 +246,11 @@ def print_security_report(
                 print(f"        reduced by:   {', '.join(a.reduced_by)}")
                 recommend.update(a.reduced_by)
             print(f"        fix:          {a.fix}")
-        not_on = [d for d in ("prompt_hardening", "spotlighting", "outbound_guard") if d in recommend and d != defense]
-        if not_on:
-            print(f"  → Start here: turn on {', '.join(not_on)} and re-run to see each gap close.")
-        if any("allowlist" in advice_for(a).fix.lower() for a in vulns):
-            print("  → And add a recipient allowlist -- the redirect/mirror attacks are only fully "
-                  "closed by restricting which addresses the agent can send to.")
+        enforced = [d for d in _ENFORCING_RUNGS if d in recommend and d != defense]
+        persuasive = [d for d in _INSTRUCTION_RUNGS if d in recommend and d != defense]
+        if enforced:
+            print(f"  → Start here: turn on {', '.join(enforced)} -- deterministic checks on every "
+                  "send that no injected text can talk past -- and re-run.")
+        if persuasive:
+            print(f"  → {'Then' if enforced else 'Start here'}: {', '.join(persuasive)} lower the odds "
+                  "the model is fooled at all; re-run to see each gap close.")

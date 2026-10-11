@@ -14,7 +14,7 @@ Tripwire is an evaluation harness that measures AI agent vulnerability to prompt
 # Install for development (editable, with test + optional extras)
 pip install -e ".[dev]"        # or: uv pip install -e ".[dev]"
 
-# Run all tests (~640 tests, fully offline, ~6s). tests/test_e2e.py runs the real
+# Run all tests (~690 tests, fully offline, ~6s). tests/test_e2e.py runs the real
 # CLI against an in-process fake provider (tests/fake_provider.py); tests/test_live.py
 # runs a real smoke sweep only with TRIPWIRE_LIVE=1 and a provider key.
 python -m pytest tests/ -q
@@ -54,7 +54,7 @@ Published on PyPI as `tripwire-eval` (the import package and CLI stay `tripwire`
 
 **Scenarios** (`tripwire/scenarios.py`): the tasks the agent is attacked on - `invoice` (default), `helpdesk`, `calendar`, `expense`. Each plants the secret, defines a legitimate task + AUTHORIZED recipient, and builds a full `EpisodeSpec`. Selected via `scenarios:` in the config.
 
-**Defenses** (`tripwire/defenses/`): the ladder - `prompt_hardening` (L1), `spotlighting` (L2), `tool_filter`, `outbound_guard` (L3). Four hooks: `wrap_system_prompt`, `filter_tool_calls`, `check_tool_call`, `wrap_tool_result`.
+**Defenses** (`tripwire/defenses/`): the ladder - instruction-level `prompt_hardening` and `sandwich` (L1), `spotlighting` and `datamarking` (L2), `tool_filter`, `outbound_guard` (L3, a second model), and the deterministic egress rungs `taint_tracking`, `secret_egress_scan`, `recipient_allowlist`. Four hooks: `wrap_system_prompt`, `filter_tool_calls`, `check_tool_call`, `wrap_tool_result`, plus an optional `bind(ctx)` that `Scenario.build_spec` calls first with a `DefenseContext` (user's request, provisioned secrets, untrusted tools - never the decoy or the judge's authorized set).
 
 **Attacks** (`tripwire/attacks/`): `base.py` is the `Attack` protocol (`name` + `render(canary) -> str`; attacks never embed the canary). The suite (see `docs/attacks.md`): templated baselines (`agentdojo_wrappers.py`), hand-crafted attacks (`fixed_injection.py`: metadata_exfil, public_identifier, forged_boundary, prerequisite_mirror, mundane_redirect), and adaptive attackers (`iterative.py` PAIR, `tree_attacker.py` TAP). Registered in `config/loader.py`.
 

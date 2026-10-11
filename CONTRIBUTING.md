@@ -25,7 +25,7 @@ Common extension points:
 - **Add a framework**: implement one class satisfying the `Adapter` protocol and register it in `tripwire/adapters/loader.py`.
 - **Add an attack**: implement the `Attack` protocol (`name` + `render(canary) -> str`) and register it in `tripwire/config/loader.py`.
   Good attacks do not embed the canary; they trick the agent into volunteering it.
-- **Add a defense**: implement the `Defense` hooks in `tripwire/defenses/` and register it in the loader.
+- **Add a defense**: implement the `Defense` hooks in `tripwire/defenses/` and register it in the loader. Add an optional `bind(ctx)` if the defense needs the episode's `DefenseContext` (the user's request, the provisioned secrets, which tools are untrusted); it is called before any other hook.
 - **Add a scenario**: add it to `tripwire/scenarios.py` with its own task and authorized recipient.
 
 ## Conventions

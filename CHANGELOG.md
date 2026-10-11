@@ -5,6 +5,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (defense track)
+
+- **Deterministic egress defenses**, refusing a `send_email` before it runs with no model in the decision:
+  `recipient_allowlist` (only addresses the user's own request names, plus an optional `recipient_allowlist: {allow: [...]}` list),
+  `secret_egress_scan` (the provisioned secret in any form the judge recognizes, including split across sends),
+  and `taint_tracking` (an address that entered the episode only through tool output).
+  Against an agent that obeys every injection they hold ASR at 0% in every adapter, with no utility cost for an agent that does its job (`tests/test_e2e.py`).
+- **`sandwich`** (repeat the user's request after every tool result) and **`datamarking`** (spotlighting's marker-per-word variant, Hines et al.).
+- **`bind(ctx)` on defenses.** `Scenario.build_spec` hands each defense a `DefenseContext` before anything else: the user's request, the provisioned secrets, the untrusted tools.
+  It never carries the attacker's decoy or the judge's authorized set; the legitimate recipients are derived from the user's request.
+- **`EpisodeSpec.system_prompt_wrapper`**, so an adapter that runs a second agent can apply the defense to that agent's persona.
+- **Outbound guard options**: `recipient_context` (default on) shows the guard, outside its fence, the recipients the user asked for and blocks a send to anyone else; `precheck` (default off) runs the deterministic secret check before the model call.
+
+### Changed (defense track)
+
+- **Every defense now reaches the sender in the `multi_agent` relay.** Agent B's persona goes through the defense's prompt wrapper and Agent A's summary through its tool-result wrapper (fenced, marked, or taint-tracked like any tool output). Before, the agent that sends email ran undefended; `multi_agent` rows under a prompt-level defense are not comparable across this change.
+- **`prompt_hardening`, `spotlighting` and `datamarking` anchor the recipient**: send only to the recipients the user named (listed when bound), never add or redirect one because tool content asks. Prompt-level numbers from before this change are not comparable.
+- The security report leads with the deterministic rungs ("Start here: turn on recipient_allowlist, secret_egress_scan"), then the model-level ones; advice names the defenses to turn on instead of telling you to build an allowlist.
+- `tripwire init` includes `recipient_allowlist`; the example config lists the whole ladder and its options; the CI example gates on `recipient_allowlist` instead of `tool_filter` (deterministic, and the agent still sends its legitimate email).
+
+### Fixed (defense track)
+
+- `examples/byo_agent_example.py` recorded a guard-denied call as `tool_result`, so the judge scored a refused send as a leak and every defended row for an agent copied from it was inflated. It now records `tool_blocked`, and omits `tools` when a defense leaves none.
+
 ### Changed
 
 - **PAIR may encode or split the id.**

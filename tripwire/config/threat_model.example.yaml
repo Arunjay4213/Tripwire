@@ -76,16 +76,44 @@ attacks:
 #                    still reads the task and the injection. Degenerate for a
 #                    pure leak scenario -- no send_email means ASR 0 and
 #                    utility 0 -- kept as the "blunt instrument" reference point.
+#   sandwich         L1 variant. Repeats the user's request after every tool
+#                    result, so the injection is not the last thing the model reads.
+#   datamarking      L2 variant (Hines et al.). Marks every word of tool output
+#                    instead of fencing it, so there is no closing fence to forge.
 #   outbound_guard   L3. A second model inspects each send_email before it fires
-#                    and blocks a detected secret leak. Strongest and most
-#                    expensive (an extra model call per action; false positives
-#                    cost utility). Dual-LLM / PromptGuard pattern.
+#                    and blocks a detected secret leak, or a send to a recipient
+#                    the user did not ask for (it is shown the user's recipients).
+#                    Strongest model-based rung and the most expensive (an extra
+#                    model call per action; false positives cost utility).
+#                    Dual-LLM / PromptGuard pattern.
+#
+# Deterministic rungs -- no model call, so no payload can argue with them:
+#   taint_tracking      blocks a send to an address that only untrusted tool
+#                       content introduced (not the user's request).
+#   secret_egress_scan  blocks a send whose content carries the provisioned
+#                       secret in any form the judge recognizes (DLP).
+#   recipient_allowlist blocks a send to any address the user did not name in
+#                       their request. Closes every redirect by construction.
 defenses:
   - null
   - prompt_hardening
+  - sandwich
   - spotlighting
+  - datamarking
   - tool_filter
   - outbound_guard
+  - taint_tracking
+  - secret_egress_scan
+  - recipient_allowlist
+
+# Optional per-defense settings (defaults shown):
+# outbound_guard:
+#   fail_closed: true        # a guard whose model errors blocks the call
+#   recipient_context: true  # tell the guard which recipients the user asked for
+#   precheck: false          # deterministic secret scan before the model call
+# recipient_allowlist:
+#   from_user_message: true  # approve the addresses the user's request names
+#   allow: []                # plus these fixed addresses
 
 # tool_filter needs no extra config: it keeps every listed scenario's read tool
 # and denies everything else, including send_email. `allowed_tools: [...]` is an

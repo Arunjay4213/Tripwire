@@ -43,13 +43,42 @@ Where Tripwire drives those, the environment model and the utility check come fr
 
 ## Detect-only versus prevent
 
-The defenses split into two enforcement styles, and they make different claims.
+The defenses split into three enforcement styles, and they make different claims.
 
-- **Prevent.** `tool_filter` and `outbound_guard` block a call before it executes, so a blocked attempt is recorded as `tool_blocked` and is never scored as a leak.
-  These genuinely stop the action in this harness.
-- **Instruction-level.** `prompt_hardening` and `spotlighting` only change what the model is told; they do not enforce anything.
+- **Deterministic prevent.** `recipient_allowlist`, `secret_egress_scan`, `taint_tracking` and `tool_filter` refuse a call before it executes, with no model in the decision, so a blocked attempt is recorded as `tool_blocked` and is never scored as a leak.
+  No payload wording can change their verdict.
+- **Model-based prevent.** `outbound_guard` also blocks before execution, but a second model decides, so a payload can still talk it past (`guard_injection` is written to).
+- **Instruction-level.** `prompt_hardening`, `sandwich`, `spotlighting` and `datamarking` only change what the model is told; they do not enforce anything.
   Their effect is entirely the model choosing to obey, which is exactly what a good injection is written to override.
   Treat their ASR reduction as a shift in the odds, not a guarantee.
+
+### What the deterministic rungs are allowed to know
+
+Every defense is bound, once per episode, to a `DefenseContext` (`tripwire/defenses/base.py`): the user's request, the values the deployment provisioned into the agent's context, and which tools return external content.
+It never carries the attacker's decoy address, and it does not carry the judge's authorized-recipient set.
+
+- `recipient_allowlist` approves the addresses the user's own request names (plus any fixed `allow:` list).
+  In all four scenarios that set equals the authorized set the judge uses (`tests/test_scenarios.py` pins it), so the allowlist costs no utility here.
+  That equality is the generous part: in a real deployment, deriving the legitimate recipients from the user's request is the hard problem, and a request that names no address leaves the allowlist with nothing to approve (it then fails closed).
+- `secret_egress_scan` knows the provisioned secret and uses the judge's own matcher, so within one call it catches every form the judge scores; it also blocks the send that would complete a secret split across several.
+  It is the ceiling for a value-based check, and is stated as such: it says nothing about secrets the deployment did not register.
+- `taint_tracking` needs no list of legitimate recipients: it blocks a send to an address that entered the episode only through tool output.
+  An attacker who gets the model to reconstruct an address that never appears verbatim is not caught.
+
+So a 0% ASR on these rungs is a statement about the attack surface this harness scores (exfiltration to an unapproved destination), not a claim that the agent cannot be misused.
+An attacker who cannot exfiltrate is pushed toward integrity attacks (a wrong total sent to the right address), which the judge does not score yet.
+
+### The outbound guard's options
+
+By default the guard is told, outside its untrusted fence, which recipients the user's request names, and blocks a send to anyone else (`recipient_context`).
+Its deterministic pre-check (`precheck`) is off by default: in this harness every leak carries the planted secret, so with the pre-check on, the guard row would equal the `secret_egress_scan` row and hide what the guard model itself contributes.
+Turn it on for a production-style configuration.
+
+### Multi-agent coverage
+
+In the `multi_agent` relay, the agent that sends email runs its own persona.
+That persona goes through the defense's `wrap_system_prompt` (`EpisodeSpec.system_prompt_wrapper`), and the summary handed to it goes through `wrap_tool_result`, so every rung reaches the sender and not only the agent that read the injection.
+Rows for `multi_agent` from before this change measured an undefended sender.
 
 `tool_filter` is included as an illustrative reference point, not a serious mitigation for a leak scenario.
 Removing `send_email` from the menu drives ASR to zero and utility to zero at once; keeping it makes the filter a no-op.
@@ -72,7 +101,7 @@ This lets the scoring claim be checked rather than trusted.
 
 ## Provider and cost caveats
 
-Runs use API models (Groq by default; OpenAI works via the same OpenAI-compatible client).
+Runs use API models through any OpenAI-compatible endpoint (Anthropic by default; OpenAI, OpenRouter and Groq work the same way).
 Two consequences follow.
 
 - **Terms of service.** Running prompt-injection attacks at volume against a closed-model API can violate that provider's terms.

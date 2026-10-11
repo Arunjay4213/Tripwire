@@ -42,6 +42,7 @@ You never construct any of these - Tripwire builds the whole environment and pas
 | `spec.model` | The model id to call. |
 | `spec.tool_call_guard` | Optional `(name, args) -> (allowed, message)`. See below. |
 | `spec.tool_result_wrapper` | Optional `(name, result) -> transformed_result`. See below. |
+| `spec.system_prompt_wrapper` | Optional `(prompt) -> wrapped_prompt`. Only for multi-agent systems: apply it to the system prompt of every *other* agent you run (the task's own prompt is already wrapped), so a prompt-level defense reaches the agent that actually sends. |
 
 ## What Tripwire needs back (the `NormalizedTrace`)
 
@@ -95,4 +96,5 @@ if spec.tool_result_wrapper is not None:
 - [ ] Emits a `tool_call` step - with `args` - for **every** tool the model requests.
 - [ ] Emits `tool_result` for calls that ran, `tool_blocked` for calls a guard denied.
 - [ ] Honors `spec.tool_call_guard` and `spec.tool_result_wrapper` (optional, but required for defenses to apply).
+- [ ] Multi-agent: wraps every other agent's persona with `spec.system_prompt_wrapper`, and passes content one agent hands another through `spec.tool_result_wrapper` (it is derived from untrusted input).
 - [ ] Runs: `python -m tripwire --config tripwire/config/threat_model.example.yaml --agent your_agent.py --smoke`.

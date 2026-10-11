@@ -62,11 +62,16 @@ attacks:
   - mundane_redirect
   - direct
 
-# Defenses to measure, cheap-weak to expensive-strong. `null` = no defense.
+# Defenses to measure. `null` = no defense. prompt_hardening and spotlighting
+# change what the model is told; recipient_allowlist enforces: a send to an
+# address the user never named does not run. Also available: sandwich,
+# datamarking, outbound_guard (a second model), secret_egress_scan,
+# taint_tracking, tool_filter (see docs/methodology.md).
 defenses:
   - null
   - prompt_hardening
   - spotlighting
+  - recipient_allowlist
 
 # Seeds = independent trials (the model still samples at temperature). More
 # seeds -> tighter confidence intervals. 3 is a quick look; 15+ for real numbers.

@@ -56,7 +56,7 @@ models:    [claude-haiku-4-5]
 adapters:  [raw_loop]
 scenarios: [invoice, helpdesk, calendar, expense]   # tasks to attack the agent on
 attacks:   [direct, metadata_exfil, mundane_redirect, prerequisite_mirror, ...]
-defenses:  [null, prompt_hardening, spotlighting]   # null = no defense
+defenses:  [null, prompt_hardening, spotlighting, recipient_allowlist]   # null = no defense
 seeds:     [0, 1, 2]
 ```
 
@@ -72,7 +72,7 @@ Your agent just needs to expose `run(spec) -> NormalizedTrace` (or an `adapter` 
 
 - **Bring your own agent.** One contract - `EpisodeSpec` in, `NormalizedTrace` out - and any agent, any framework, gets the same evaluation.
 - **13 attacks.** Templated baselines (ported from AgentDojo), five hand-crafted attacks that actually break real defenses (including `mundane_redirect`, the first to beat the input-side ones), and two adaptive attackers (PAIR-style and TAP-style tree search with an LLM critic). → [docs/attacks.md](docs/attacks.md)
-- **A defense ladder.** `prompt_hardening`, `spotlighting`, `tool_filter`, `outbound_guard` - cheap-weak to expensive-strong, so you can see the security/utility trade-off, not a single point.
+- **A defense ladder.** Instruction-level rungs (`prompt_hardening`, `sandwich`, `spotlighting`, `datamarking`), a second-model `outbound_guard`, and deterministic egress checks (`taint_tracking`, `secret_egress_scan`, `recipient_allowlist`) that no injected text can talk past - each measured for security *and* utility, so you see the trade-off, not a single point. Every defense reaches every agent, including the sender in a multi-agent relay.
 - **Realistic scenarios.** `invoice`, `helpdesk`, `calendar`, `expense` - each a different task with its own authorized recipient. Your agent is tested across all of them.
 - **Actionable feedback.** Every run ends with a per-attack report: what leaked, why, and the concrete fix.
 - **Deterministic, honest scoring.** Pure-Python judge (no LLM), fixed seeds, Wilson confidence intervals instead of bare percentages. Runs in CI.
@@ -114,7 +114,7 @@ python scripts/ci/check_asr_threshold.py --results results.json --threshold 0.5
 ```bash
 git clone https://github.com/Arunjay4213/Tripwire && cd Tripwire
 pip install -e ".[dev]"     # or: uv pip install -e ".[dev]"
-pytest                      # 351 offline tests, no network
+pytest                      # ~690 offline tests, no network
 ```
 
 ## License
