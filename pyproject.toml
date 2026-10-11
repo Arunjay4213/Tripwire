@@ -48,9 +48,10 @@ dependencies = [
 
 [project.optional-dependencies]
 agentdojo = ["agentdojo==0.1.35"]   # real AgentDojo suites for the bridge
+crewai = ["crewai>=0.100,<2"]       # the crewai adapter (lazily imported)
 viz = ["matplotlib>=3.8"]           # Pareto / analysis plots
 dev = ["pytest>=9", "agentdojo==0.1.35", "matplotlib>=3.8"]
-all = ["agentdojo==0.1.35", "matplotlib>=3.8"]
+all = ["agentdojo==0.1.35", "crewai>=0.100,<2", "matplotlib>=3.8"]
 
 [project.scripts]
 tripwire = "tripwire.__main__:main"

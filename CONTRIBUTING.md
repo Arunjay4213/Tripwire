@@ -8,11 +8,11 @@ This is a small project; issues and pull requests are welcome.
 ```bash
 git clone https://github.com/Arunjay4213/Tripwire && cd Tripwire
 pip install -e ".[dev]"     # or: uv pip install -e ".[dev]"
-python -m pytest tests/ -q  # 293 tests, fully offline, no network or API key
+python -m pytest tests/ -q  # 351 tests, fully offline, no network or API key
 ```
 
 The test suite never makes a network call: adapters are driven with stub clients and the judge is exercised on hand-built traces.
-A dummy provider key (`GROQ_API_KEY=dummy`) is enough to satisfy the OpenAI client constructor if your environment has none set.
+No provider key is needed — `tests/conftest.py` plants a dummy one when your environment has none, purely to satisfy the OpenAI client constructor (several adapters build their client in `__init__`). A real key already in your environment is left alone.
 
 ## How the pieces fit
 
