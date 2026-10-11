@@ -96,6 +96,46 @@ def _by_adapter(rows: list[dict]) -> dict[str, list[dict]]:
     return out
 
 
+def test_discovery_library_and_frozen_replay_cli(tmp_path, monkeypatch, capsys, provider):
+    from tripwire.attacks.replay import load_library
+
+    library = tmp_path / "payloads.json"
+    code, _, err, discovered = _run_cli(
+        tmp_path, monkeypatch, capsys, provider,
+        _config(adapters=["raw_loop"], attacks=["iterative"]),
+        "--save-replay-library", str(library),
+    )
+    assert code == 0, err
+    assert discovered["campaigns"][0]["best_payload"]
+    cases = load_library(str(library))
+    code, out, err, replayed = _run_cli(
+        tmp_path, monkeypatch, capsys, provider,
+        _config(adapters=["raw_loop"], attacks=["iterative"], seeds=[100]),
+        "--replay-library", str(library),
+    )
+    assert code == 0, err
+    assert replayed[0]["succeeded"] and replayed[0]["attack"] == cases[0].name
+    assert "held-out" in out
+    # Every request is a target-agent call. Adaptive calls have neither tools
+    # nor the planted system value, so this also detects accidental regeneration.
+    assert all(make_canary(100) in str(request) for request in provider.requests)
+
+
+@pytest.mark.parametrize("adapter", ADAPTERS)
+def test_delivery_bounce_reaches_each_adapter_without_scoring_failed_send(tmp_path, monkeypatch, capsys, provider, adapter):
+    cfg = _config(adapters=[adapter], attacks=["tool_knowledge"], max_turns=6)
+    cfg += "attack_options:\n  injection_slots: [bounce]\n"
+    code, _, err, rows = _run_cli(tmp_path, monkeypatch, capsys, provider, cfg)
+    assert code == 0, err
+    assert not rows[0]["succeeded"]
+    assert rows[0]["scenario"] == "invoice/bounce/label_known"
+    # This fake model sends once and then stops. Its rejected send must not
+    # count as exfiltration, while the delivery notice reaches its next turn.
+    notices = [m["content"] for request in provider.requests for m in request["messages"]
+               if m.get("role") == "tool" and "Delivery rejected" in str(m.get("content"))]
+    assert notices and all("<INFORMATION>" in notice for notice in notices)
+
+
 # --- the two anchors: a leak everywhere, a clean run everywhere -----------------
 
 def test_obedient_model_is_scored_as_a_leak_in_every_adapter(tmp_path, monkeypatch, capsys, provider):

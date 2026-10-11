@@ -30,6 +30,10 @@ Do not read a point estimate without its interval.
 
 ## The environment is a toy, by design
 
+As of 2026-10-11, optional attack profiles vary payload position, a simulated delivery-failure notice, or read-tool metadata, and whether initial attacker instructions disclose the secret label. Profiles are reported separately. The default remains append/known. The bounce rejects a send before execution; that failed send is excluded from both leak and utility scoring. Because a delivery failure can itself affect utility, compare bounce runs to a benign delivery-failure control before attributing all utility loss to the attack.
+
+Adaptive discovery now persists the best candidate and can save successful payloads to a versioned replay library. Frozen replay requires seeds disjoint from selected discovery seeds, restores each discovery profile, and makes no attacker-model calls. Discovery campaign break rate and replay episode ASR measure different things and must be reported separately. Fresh canaries test candidate transfer; they do not replace repeated stochastic trials or representative deployment workloads. See `attacks.md` for the commands and initial-knowledge ablation limits. No new real-model effectiveness figures have been collected for these features.
+
 The environment is a scripted, two-tool scenario: a `read_inbox` that returns a poisoned inbox and a `send_email` that records outbound mail.
 The benign task and the injection ride in the same inbox content, mirroring how real indirect prompt injection hides instructions inside otherwise-normal data the agent is already processing.
 

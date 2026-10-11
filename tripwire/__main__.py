@@ -235,6 +235,11 @@ def main() -> None:
         help="before the sweep, make one cheap call per configured model and stop "
              "if the provider rejects it (catches a model/provider mismatch)",
     )
+    replay_flags = parser.add_mutually_exclusive_group()
+    replay_flags.add_argument("--save-replay-library", metavar="PATH",
+                              help="Save successful adaptive payloads for held-out replay")
+    replay_flags.add_argument("--replay-library", metavar="PATH",
+                              help="Run frozen payloads on held-out config seeds without an attacker LLM")
     args = parser.parse_args()
 
     _load_env_file()
@@ -268,7 +273,21 @@ def main() -> None:
         # --agent replaces the configured adapters entirely -- same environment,
         # attacks, defenses, and judge, just a different tool loop under test.
         adapters = [load_agent_module(args.agent)] if args.agent else config.adapters
-        attacks = resolve_attacks(config.attacks)
+        attacks = [] if args.replay_library else resolve_attacks(config.attacks)
+        from tripwire.attacks.replay import load_library, validate_replay
+        replay_cases = None
+        if args.replay_library:
+            bases = {s.name.split("/", 1)[0] for s in config.scenarios}
+            replay_cases = [c for c in load_library(args.replay_library)
+                            if c.scenario.split("/", 1)[0] in bases]
+            if not replay_cases:
+                raise ValueError("Replay library has no cases for the configured scenarios")
+            if config.smoke:
+                replay_cases = replay_cases[:1]
+            validate_replay(replay_cases, config.seeds)
+        for library_path in (args.replay_library, args.save_replay_library):
+            if library_path and os.path.realpath(library_path) == os.path.realpath(args.output):
+                raise ValueError("Replay library and results output must use different paths")
     except (ValueError, FileNotFoundError, TypeError, AttributeError) as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(EXIT_CONFIG_ERROR)
@@ -280,24 +299,46 @@ def main() -> None:
     if args.preflight:
         _preflight(config)
 
-    print(f"Running sweep: {len(adapters)} adapter(s) x {len(config.models)} model(s) "
-          f"x {len(config.scenarios)} scenario(s) x {len(attacks)} attack(s) "
-          f"x {len(config.defenses)} defense(s) x {len(config.seeds)} seed(s), "
-          f"max {config.max_turns} turn(s) per episode")
+    if replay_cases is None:
+        print(f"Running sweep: {len(adapters)} adapter(s) x {len(config.models)} model(s) "
+              f"x {len(config.scenarios)} scenario(s) x {len(attacks)} attack(s) "
+              f"x {len(config.defenses)} defense(s) x {len(config.seeds)} seed(s), "
+              f"max {config.max_turns} turn(s) per episode")
+    else:
+        print(f"Running replay: {len(replay_cases)} payload/profile pair(s) x "
+              f"{len(adapters)} adapter(s) x {len(config.models)} model(s) x "
+              f"{len(config.defenses)} defense(s) x {len(config.seeds)} held-out seed(s), "
+              f"max {config.max_turns} turn(s) per episode")
 
     concurrency = args.concurrency if args.concurrency is not None else config.max_concurrency
     if concurrency > 1:
         print(f"Concurrency: {concurrency} cells in parallel")
-    episodes, campaigns = run_sweep(
-        adapters, config.models, attacks, config.seeds, config.campaign_budget,
-        config.defenses, config.scenarios, max_turns=config.max_turns,
-        concurrency=concurrency,
-    )
+    if replay_cases is not None:
+        from tripwire.attacks.replay import run_replay_sweep
+        print(f"Replaying {len(replay_cases)} frozen payload(s) with their discovery profiles")
+        episodes, campaigns = run_replay_sweep(
+            adapters, config.models, replay_cases, config.seeds, config.defenses,
+            max_turns=config.max_turns, concurrency=concurrency,
+        )
+    else:
+        episodes, campaigns = run_sweep(
+            adapters, config.models, attacks, config.seeds, config.campaign_budget,
+            config.defenses, config.scenarios, max_turns=config.max_turns,
+            concurrency=concurrency,
+        )
 
     # Ensure output directory exists
     os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
     write_results(episodes, args.output, campaigns)
     print(f"\nResults written to {args.output}")
+    if args.save_replay_library:
+        from tripwire.attacks.replay import save_library
+        try:
+            count = save_library(campaigns, args.save_replay_library)
+        except (ValueError, OSError) as exc:
+            print(f"Error saving replay library: {exc}", file=sys.stderr)
+            sys.exit(EXIT_CONFIG_ERROR)
+        print(f"Saved {count} successful discovery payload(s) to {args.save_replay_library}")
 
     if any(_is_scored(r) for r in [*episodes, *campaigns]):
         if episodes:

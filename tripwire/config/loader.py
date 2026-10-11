@@ -17,6 +17,7 @@ from tripwire.attacks.agentdojo_wrappers import (
     ImportantInstructionsAttack,
     InjecAgentAttack,
     SystemMessageAttack,
+    ToolKnowledgeAttack,
 )
 from tripwire.attacks.base import Attack
 from tripwire.attacks.fixed_injection import (
@@ -39,7 +40,7 @@ from tripwire.defenses.secret_egress_scan import SecretEgressScan
 from tripwire.defenses.spotlighting import Datamarking, Spotlighting
 from tripwire.defenses.taint_tracking import TaintTracking
 from tripwire.defenses.tool_filter import ToolFilter
-from tripwire.scenarios import SCENARIOS, Scenario
+from tripwire.scenarios import INJECTION_SLOTS, SCENARIOS, Scenario
 
 # Registry of defenses: name -> class, instantiated with cls(). tool_filter
 # (needs allowed_tools) and the two with config options, outbound_guard and
@@ -71,6 +72,7 @@ _ATTACK_REGISTRY: dict[str, type] = {
     "system_message": SystemMessageAttack,
     "injecagent": InjecAgentAttack,
     "important_instructions": ImportantInstructionsAttack,
+    "tool_knowledge": ToolKnowledgeAttack,
     "iterative": IterativeAttacker,
     "tree_attacker": TreeAttacker,
 }
@@ -122,7 +124,7 @@ _REQUIRED_KEYS = ("models", "attacks", "adapters", "seeds")
 # undefended baseline while the user reads it as "spotlighting results".
 _TOP_LEVEL_KEYS = frozenset(
     {*_REQUIRED_KEYS, "scenarios", "defenses", "allowed_tools", "outbound_guard",
-     "recipient_allowlist", "limits"}
+     "recipient_allowlist", "limits", "attack_options"}
 )
 _OUTBOUND_GUARD_KEYS = frozenset({"fail_closed", "precheck", "recipient_context"})
 _RECIPIENT_ALLOWLIST_KEYS = frozenset({"allow", "from_user_message"})
@@ -389,6 +391,20 @@ def load_config(path: str) -> TripwireConfig:
             raise _unknown_name_error("attack", name, _ATTACK_REGISTRY)
 
     scenarios = resolve_scenarios(scenario_names)
+    options = raw.get("attack_options", {})
+    if not isinstance(options, dict):
+        raise ValueError("attack_options must be a mapping")
+    _check_keys(options, frozenset({"injection_slots", "knowledge_modes"}), "attack_options", path)
+    slots = _require_str_list(options.get("injection_slots", ["append"]), "injection_slots", path)
+    modes = _require_str_list(options.get("knowledge_modes", ["known"]), "knowledge_modes", path)
+    for slot in slots:
+        if slot not in INJECTION_SLOTS:
+            raise _unknown_name_error("injection slot", slot, INJECTION_SLOTS)
+    for mode in modes:
+        if mode not in ("known", "unknown"):
+            raise _unknown_name_error("knowledge mode", mode, ("known", "unknown"))
+    scenarios = [s.with_attack_options(slot, mode == "known")
+                 for s in scenarios for slot in slots for mode in modes]
     warnings = _allowed_tools_warnings(allowed_tools, defense_names, scenarios)
     for key in ("outbound_guard", "recipient_allowlist"):
         if raw.get(key) and key not in defense_names:

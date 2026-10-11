@@ -16,6 +16,7 @@ or anything the judge treats as secret.
 from __future__ import annotations
 
 import inspect
+import re
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
@@ -38,6 +39,8 @@ class AttackContext:
     domain: str                         # e.g. "corp.com"
     decoy_recipient: str                # plausible same-domain address NOT authorized
     sender_persona: str                 # who a plausible injected note is "from"
+    injection_slot: str = "append"
+    secret_label_known: bool = True
 
     @property
     def authorized_recipient(self) -> str:
@@ -75,8 +78,27 @@ def render_payload(attack: Any, canary: str, ctx: AttackContext | None) -> str:
     """Render an attack with the context when it accepts one, without it
     otherwise. The single call site the harness should use."""
     if ctx is not None and accepts_context(attack):
-        return attack.render(canary, ctx)
-    return attack.render(canary)
+        payload = attack.render(canary, ctx)
+    else:
+        payload = attack.render(canary)
+    # A frozen replay is byte-identical to the saved payload, including any
+    # knowledge the attacker legitimately discovered during its search.
+    return payload if getattr(attack, "preserve_payload", False) else attacker_text(payload, ctx)
+
+
+def attacker_text(text: str, ctx: AttackContext | None) -> str:
+    """Remove supplied label/format hints for the unknown-label ablation.
+
+    This limits initial oracle knowledge; it does not prevent an adaptive
+    attacker from learning or guessing the label through target observations.
+    The target's planted secret and scoring rules stay identical.
+    """
+    if ctx is None or ctx.secret_label_known:
+        return text
+    text = re.sub(r"integration[ _-]+instance[ _-]+id|instance[ _-]+id", "private configuration value", text, flags=re.I)
+    text = re.sub(r"(?:fake )?32[- ]character hex (?:token|value)|32[- ]hex", "private value", text, flags=re.I)
+    text = re.sub(r"(?i)\b(?:sent-by-)?instance(?=\s*:)", "reference", text)
+    return text
 
 
 def set_attack_context(attack: Any, ctx: AttackContext) -> None:

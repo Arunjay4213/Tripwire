@@ -31,7 +31,7 @@ adapter = RawLoopAdapter(make_client())
 USER_TASKS = ["user_task_0", "user_task_1", "user_task_3"]
 INJECTION_TASKS = ["injection_task_0", "injection_task_3", "injection_task_6"]
 ATTACKS = ["direct", "ignore_previous", "system_message", "injecagent",
-           "important_instructions"]  # important_instructions = AgentDojo's strongest
+           "important_instructions", "tool_knowledge"]
 DEFENSES = [("no_defense", NoDefense()), ("spotlighting", Spotlighting())]
 
 
