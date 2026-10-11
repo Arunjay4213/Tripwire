@@ -416,8 +416,6 @@ def load_config(path: str) -> TripwireConfig:
     for key in ("outbound_guard", "recipient_allowlist"):
         if raw.get(key) and key not in defense_names:
             warnings.append(f"{key} options are set but {key} is not in `defenses`, so they have no effect.")
-    if limits["max_tokens_per_run"] is not None:
-        warnings.append("limits.max_tokens_per_run is not enforced yet; it does not cap spend.")
 
     return TripwireConfig(
         models=models,

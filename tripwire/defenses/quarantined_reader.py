@@ -50,7 +50,7 @@ import os
 import re
 from typing import Any, Callable
 
-from .base import DefenseContext, TypedField
+from .base import DefenseContext, TypedField, response_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +158,7 @@ class QuarantinedReader:
         self.calls = 0
         self.errors = 0
         self.dropped = 0
+        self.tokens = 0  # prompt + completion tokens the extractor model consumed
         self.last_error: str | None = None
         self._client: Any = None
         self._ctx: DefenseContext | None = None
@@ -248,4 +249,5 @@ class QuarantinedReader:
                 {"role": "user", "content": format_extraction_request(text, fields)},
             ],
         )
+        self.tokens += response_tokens(response)
         return parse_extraction(response.choices[0].message.content)

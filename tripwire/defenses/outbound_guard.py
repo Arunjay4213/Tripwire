@@ -73,6 +73,8 @@ from typing import Any, Callable
 from tripwire.defenses.base import DefenseContext
 from tripwire.harness.judge import secret_in
 
+from .base import response_tokens
+
 logger = logging.getLogger(__name__)
 
 # detector(outbound_text) -> True means "block this, it looks like a leak".
@@ -189,6 +191,7 @@ class OutboundGuard:
         self.calls = 0
         self.errors = 0
         self.blocks = 0
+        self.tokens = 0  # prompt + completion tokens the detector model consumed
         self.last_error: str | None = None
         self._client: Any = None
 
@@ -237,6 +240,7 @@ class OutboundGuard:
             ],
             temperature=0,
         )
+        self.tokens += response_tokens(response)
         return parse_verdict(response.choices[0].message.content)
 
     def check_tool_call(self, name: str, args: dict[str, Any]) -> tuple[bool, str]:

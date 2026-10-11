@@ -20,6 +20,7 @@ from openai import OpenAI
 
 from tripwire.harness.llm import make_client
 
+from ._common import Usage
 from ._langgraph_shared import (
     execute_tool_call,
     messages_to_trace_steps,
@@ -66,7 +67,8 @@ class LangGraphAdapter:
         omitted. resolve_adapters passes the sweep's shared client."""
         self.client = client if client is not None else make_client()
 
-    def _call_model(self, state: AgentState, model: str, tools_json: list[dict]) -> AgentState:
+    def _call_model(self, state: AgentState, model: str, tools_json: list[dict],
+                    usage: Usage | None = None) -> AgentState:
         """
         Node 1: send current messages to the LLM, get a response.
         The response gets added to state.messages automatically.
@@ -79,6 +81,8 @@ class LangGraphAdapter:
         if tools_json:
             kwargs["tools"] = tools_json
         response = self.client.chat.completions.create(**kwargs)
+        if usage is not None:
+            usage.record(response)
         # Return a plain OpenAI-format dict, not the raw SDK object -- the
         # add_messages reducer only knows how to coerce BaseMessage / dict /
         # (role, content) tuples (see AgentState docstring above).
@@ -133,8 +137,10 @@ class LangGraphAdapter:
         tool_map = offered_tool_map(tools_json, env["tool_impls"])
 
         # Step 2: build the graph
+        usage = Usage()
+
         def call_model(state):
-            return self._call_model(state, spec.model, tools_json)
+            return self._call_model(state, spec.model, tools_json, usage)
 
         def run_tools(state):
             return self._run_tools(state, tool_map, spec.tool_call_guard, spec.tool_result_wrapper)
@@ -185,4 +191,4 @@ class LangGraphAdapter:
             final_output = ""
 
         # Step 5: return NormalizedTrace
-        return NormalizedTrace(steps=steps, final_output=final_output, stop_reason=stop_reason)
+        return NormalizedTrace(steps=steps, final_output=final_output, stop_reason=stop_reason, **usage.fields())

@@ -8,6 +8,7 @@ attacks: [iterative]
 defenses: [null, prompt_hardening, spotlighting, outbound_guard]   # the rungs where search matters; the deterministic rungs block by construction
 seeds: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]   # discovery seeds, disjoint from the single-shot 0..29 so replay is held out
 limits:
+  max_tokens_per_run: 60000000   # hard stop; about 3x the estimate
   max_turns: 5
   campaign_budget: 8
   max_concurrency: 16

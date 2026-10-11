@@ -76,6 +76,16 @@ class EpisodeResult:
     # counts them on itself; the runner stores the per-episode delta). A cell
     # with guard_errors > 0 under a fail-open guard was not really guarded.
     guard_errors: int = 0
+    # What the episode cost. The target's own calls and tokens come from the
+    # trace (0 when the adapter cannot see usage); defense_calls/defense_tokens
+    # are the per-episode delta of a model-based defense's own counters
+    # (outbound_guard, quarantined_reader, or their sum in a stack).
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    model_calls: int = 0
+    defense_calls: int = 0
+    defense_tokens: int = 0
+    served_model: str = ""
 
 
 @dataclass
@@ -102,6 +112,13 @@ class CampaignResult:
     # ATTACKER_MODEL, or the target model as a fallback). None for attackers
     # without a model attribute (test stubs).
     attacker_model: str | None = None
+    # What the campaign cost: the target's calls and tokens over every attempt,
+    # the attacker model's tokens (its own counter's delta), and the defense's.
+    target_model_calls: int = 0
+    target_prompt_tokens: int = 0
+    target_completion_tokens: int = 0
+    attacker_tokens: int = 0
+    defense_tokens: int = 0
     # "error" when the campaign itself aborted (e.g. the attacker LLM failed
     # past its own retries). broke/attempts_to_break then cover only the
     # evaluations spent before the abort, so reports should not count an
@@ -235,6 +252,8 @@ def run_episode(
     )
 
     errors_before = _guard_error_count(defense)
+    tokens_before = _counter(defense, "tokens")
+    calls_before = _counter(defense, "calls")
     with _defense_model_fallback(defense, spec.model):
         trace = _retry_transient(lambda: adapter.run(episode_spec))
     guard_errors = _guard_error_count(defense) - errors_before
@@ -262,6 +281,12 @@ def run_episode(
         guard_errors=guard_errors,
         status=status,
         error=error,
+        prompt_tokens=getattr(trace, "prompt_tokens", 0),
+        completion_tokens=getattr(trace, "completion_tokens", 0),
+        model_calls=getattr(trace, "model_calls", 0),
+        defense_calls=_counter(defense, "calls") - calls_before,
+        defense_tokens=_counter(defense, "tokens") - tokens_before,
+        served_model=getattr(trace, "served_model", "") or "",
     )
 
 
@@ -277,6 +302,32 @@ def _guard_outage_message(defense: object, count: int) -> str:
 
 class GuardOutage(RuntimeError):
     """Raised internally for an attempt whose guard errored without a leak."""
+
+
+def _counter(obj: object, name: str) -> int:
+    """An integer counter an object keeps on itself (`errors`, `calls`,
+    `tokens`), or 0 when it has none."""
+    count = getattr(obj, name, 0)
+    return count if isinstance(count, int) else 0
+
+
+def _new_usage_account() -> dict[str, int]:
+    return {"calls": 0, "prompt": 0, "completion": 0, "defense": 0}
+
+
+def _absorb_usage(acct: dict[str, int], trace: object, defense: object, defense_tokens_before: int) -> None:
+    acct["calls"] += getattr(trace, "model_calls", 0)
+    acct["prompt"] += getattr(trace, "prompt_tokens", 0)
+    acct["completion"] += getattr(trace, "completion_tokens", 0)
+    acct["defense"] += _counter(defense, "tokens") - defense_tokens_before
+
+
+def _campaign_usage(acct: dict[str, int], attacker: object, attacker_tokens_before: int) -> dict[str, int]:
+    return {
+        "target_model_calls": acct["calls"], "target_prompt_tokens": acct["prompt"],
+        "target_completion_tokens": acct["completion"], "defense_tokens": acct["defense"],
+        "attacker_tokens": _counter(attacker, "tokens") - attacker_tokens_before,
+    }
 
 
 def _guard_error_count(defense: object) -> int:
@@ -366,9 +417,12 @@ def run_campaign(
             adapter=adapter.name, model=spec.model, attack=attacker.name,
             seed=spec.environment_seed, budget=budget, defense=defense.name,
             scenario=scenario.name, evaluations_spent=spent, errors=errors,
+            **_campaign_usage(acct, attacker, attacker_tokens_before),
             attacker_model=attacker_model, best_payload=best_payload, **kw,
         )
 
+    acct = _new_usage_account()
+    attacker_tokens_before = _counter(attacker, "tokens")
     set_attack_context(attacker, scenario.attack_context())
     with _model_fallback(attacker, spec.model) as attacker_model, _defense_model_fallback(defense, spec.model):
         try:
@@ -379,6 +433,7 @@ def run_campaign(
                 )
                 spent += 1
                 guard_before = _guard_error_count(defense)
+                defense_tokens_before = _counter(defense, "tokens")
                 try:
                     trace = _retry_transient(lambda: adapter.run(episode_spec))
                 except Exception as exc:  # noqa: BLE001 -- recorded as a spent, errored attempt
@@ -386,6 +441,7 @@ def run_campaign(
                     _log_error(f"{label} attempt={attempt}", exc)
                     history.append((payload, 0, _errored_attempt_feedback(exc)))
                     continue
+                _absorb_usage(acct, trace, defense, defense_tokens_before)
                 obs = observe(trace, canary, authorized=scenario.authorized_recipients)
                 guard_delta = _guard_error_count(defense) - guard_before
                 if guard_delta and not obs.exfiltrated:
@@ -473,6 +529,7 @@ def run_scenario_tree_campaign(
         spec, canary = scenario.build_spec(defense, seed, model, payload, max_turns=max_turns)
         spent += 1
         guard_before = _guard_error_count(defense)
+        defense_tokens_before = _counter(defense, "tokens")
         try:
             trace = _retry_transient(lambda: adapter.run(spec))
         except Exception as exc:  # noqa: BLE001 -- recorded as a spent, errored evaluation
@@ -480,6 +537,7 @@ def run_scenario_tree_campaign(
             _log_error(f"{label} evaluation={spent}", exc)
             return Observation(grade=0, executed_send_email=False,
                                final_reply=_errored_attempt_feedback(exc))
+        _absorb_usage(acct, trace, defense, defense_tokens_before)
         obs = observe(trace, canary, authorized=scenario.authorized_recipients)
         guard_delta = _guard_error_count(defense) - guard_before
         if guard_delta and not obs.exfiltrated:
@@ -494,9 +552,12 @@ def run_scenario_tree_campaign(
         return CampaignResult(
             adapter=adapter.name, model=model, attack=attacker.name, seed=seed,
             budget=budget, defense=defense.name, scenario=scenario.name,
-            evaluations_spent=spent, errors=errors, attacker_model=attacker_model, **kw,
+            evaluations_spent=spent, errors=errors,
+            **_campaign_usage(acct, attacker, attacker_tokens_before), attacker_model=attacker_model, **kw,
         )
 
+    acct = _new_usage_account()
+    attacker_tokens_before = _counter(attacker, "tokens")
     set_attack_context(attacker, scenario.attack_context())
     with _model_fallback(attacker, model) as attacker_model, _defense_model_fallback(defense, model):
         try:
@@ -523,6 +584,7 @@ def run_sweep(
     scenarios: Sequence[Scenario] = (INVOICE,),
     max_turns: int = 5,
     concurrency: int = 1,
+    max_tokens: int | None = None,
 ) -> tuple[list[EpisodeResult], list[CampaignResult]]:
     """Loop adapters x models x scenarios x attacks x defenses x seeds.
 
@@ -558,15 +620,31 @@ def run_sweep(
         for defense in defenses
     ]
 
+    # limits.max_tokens_per_run: a hard stop on spend. Checked between cells
+    # (a cell runs its seeds to completion), so the overshoot is at most the
+    # cells in flight. Cells not run are reported, never silently dropped.
+    spent_tokens = 0
+    skipped = 0
+
+    def _cell_tokens(cell_result: tuple[list[EpisodeResult], list[CampaignResult]]) -> int:
+        cell_episodes, cell_campaigns = cell_result
+        return (sum(e.prompt_tokens + e.completion_tokens + e.defense_tokens for e in cell_episodes)
+                + sum(c.target_prompt_tokens + c.target_completion_tokens + c.attacker_tokens + c.defense_tokens
+                      for c in cell_campaigns))
+
     if concurrency <= 1:
         # Serial path: the shared attack/defense instances are reused across
         # cells exactly as before (behaviour unchanged from the single-thread
         # sweep), so results and their order are identical.
-        per_cell = [
-            _run_cell(adapter, model, scenario, attack, defense,
-                      seeds, campaign_budget, max_turns)
-            for (adapter, model, scenario, attack, defense) in cells
-        ]
+        per_cell = []
+        for (adapter, model, scenario, attack, defense) in cells:
+            if max_tokens is not None and spent_tokens >= max_tokens:
+                skipped += 1
+                continue
+            result = _run_cell(adapter, model, scenario, attack, defense,
+                               seeds, campaign_budget, max_turns)
+            per_cell.append(result)
+            spent_tokens += _cell_tokens(result)
     else:
         # Parallel path: the sweep is I/O-bound on the provider, so threads win.
         # Each cell gets its OWN attack + defense instances (deep-copied from the
@@ -584,8 +662,31 @@ def run_sweep(
                              copy.deepcopy(attack), copy.deepcopy(defense),
                              seeds, campaign_budget, max_turns)
 
+        from concurrent.futures import as_completed
+
+        by_index: dict[int, tuple[list[EpisodeResult], list[CampaignResult]]] = {}
         with ThreadPoolExecutor(max_workers=concurrency) as pool:
-            per_cell = list(pool.map(_run_isolated_cell, cells))
+            futures = {pool.submit(_run_isolated_cell, cell): i for i, cell in enumerate(cells)}
+            for future in as_completed(futures):
+                by_index[futures[future]] = future.result()
+                spent_tokens += _cell_tokens(by_index[futures[future]])
+                if max_tokens is not None and spent_tokens >= max_tokens:
+                    skipped = sum(1 for f in futures if f.cancel())  # queued cells never start
+                    break
+            # Cells already running when the cap tripped finish and are kept.
+            for future, index in futures.items():
+                if index not in by_index and not future.cancelled():
+                    by_index[index] = future.result()
+                    spent_tokens += _cell_tokens(by_index[index])
+        per_cell = [by_index[i] for i in sorted(by_index)]
+
+    if skipped:
+        print(
+            f"[run_sweep] token cap reached: {spent_tokens:,} tokens spent against "
+            f"limits.max_tokens_per_run={max_tokens:,}; {skipped} of {len(cells)} cells were NOT run. "
+            "The results cover only the cells that ran.",
+            file=sys.stderr,
+        )
 
     for cell_episodes, cell_campaigns in per_cell:
         episodes.extend(cell_episodes)

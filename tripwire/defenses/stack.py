@@ -102,6 +102,14 @@ class DefenseStack:
         return total
 
     @property
+    def calls(self) -> int:
+        return sum(c for m in self.members if isinstance(c := getattr(m, "calls", 0), int))
+
+    @property
+    def tokens(self) -> int:
+        return sum(t for m in self.members if isinstance(t := getattr(m, "tokens", 0), int))
+
+    @property
     def last_error(self) -> str | None:
         for member in self.members:
             last = getattr(member, "last_error", None)

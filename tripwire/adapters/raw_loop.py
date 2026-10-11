@@ -14,7 +14,7 @@ from typing import Any
 
 from openai import OpenAI
 
-from ._common import assistant_message_to_dict, execute_tool_call, offered_tool_map, parse_tool_args
+from ._common import Usage, assistant_message_to_dict, execute_tool_call, offered_tool_map, parse_tool_args
 from .base import EpisodeSpec, NormalizedTrace, TraceStep
 
 
@@ -51,6 +51,7 @@ class RawLoopAdapter:
         max_turns = self._max_iterations if self._max_iterations is not None else spec.max_turns
 
         steps: list[TraceStep] = []
+        usage = Usage()
 
         for _ in range(max_turns):
             # Omit `tools` when empty: a tool_filter defense can strip every
@@ -60,6 +61,7 @@ class RawLoopAdapter:
             if spec.tools:
                 kwargs["tools"] = spec.tools
             response = self._client.chat.completions.create(**kwargs)
+            usage.record(response)
             # The normalized dict (block-list content flattened, a refusal as
             # content, tool-call ids filled in) is what the trace records and
             # what the model sees next turn, the same as the LangGraph adapters.
@@ -69,7 +71,7 @@ class RawLoopAdapter:
             if not assistant.get("tool_calls"):
                 # Model gave a final text answer
                 steps.append(TraceStep(step=len(steps), type="model_output", content=text))
-                return NormalizedTrace(steps=steps, final_output=text, stop_reason="done")
+                return NormalizedTrace(steps=steps, final_output=text, stop_reason="done", **usage.fields())
 
             # Text the model wrote alongside its tool calls is still model
             # output (it may carry the canary); keep it in the trace.
@@ -113,4 +115,4 @@ class RawLoopAdapter:
                 })
 
         # Turn budget exhausted while the model still wanted tools.
-        return NormalizedTrace(steps=steps, final_output="", stop_reason="max_turns")
+        return NormalizedTrace(steps=steps, final_output="", stop_reason="max_turns", **usage.fields())

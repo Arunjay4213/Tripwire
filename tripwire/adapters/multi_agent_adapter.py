@@ -49,6 +49,7 @@ from langgraph.graph.message import add_messages
 from tripwire.harness.llm import make_client
 
 from ._common import assistant_message_to_dict, execute_tool_call, message_text, offered_tool_map
+from ._common import Usage
 from ._langgraph_shared import messages_to_trace_steps
 from .base import EpisodeSpec, NormalizedTrace, StopReason
 
@@ -136,7 +137,8 @@ class MultiAgentAdapter:
         # needing any provider key in the environment.
         self.client = client if client is not None else make_client()
 
-    def _call_model(self, messages: list, model: str, tools_json: list[dict]) -> dict:
+    def _call_model(self, messages: list, model: str, tools_json: list[dict],
+                    usage: Usage | None = None) -> dict:
         openai_messages = convert_to_openai_messages(messages)
         # Omit `tools` when empty: a tool_filter defense can leave an agent with
         # no tools (e.g. Agent B without send_email), and most endpoints reject
@@ -145,6 +147,8 @@ class MultiAgentAdapter:
         if tools_json:
             kwargs["tools"] = tools_json
         response = self.client.chat.completions.create(**kwargs)
+        if usage is not None:
+            usage.record(response)
         # Shared with every adapter: malformed arguments are kept verbatim as
         # {"__raw__": ...} rather than rewritten to {} (see _common.py).
         return assistant_message_to_dict(response.choices[0].message)
@@ -203,13 +207,14 @@ class MultiAgentAdapter:
         # B's persona gets the same prompt-level defense as A's (see module docstring).
         wrap_prompt = spec.system_prompt_wrapper
         actor_prompt = wrap_prompt(ACTOR_SYSTEM_PROMPT) if wrap_prompt is not None else ACTOR_SYSTEM_PROMPT
+        usage = Usage()
         a_initial_messages = [
             {"role": "system", "content": env["system_prompt"]},
             {"role": "user", "content": SUMMARIZER_USER_MESSAGE.format(user_message=user_message)},
         ]
 
         def agent_a_call_model(state):
-            return {"messages_a": [self._call_model(state["messages_a"], spec.model, a_tools)]}
+            return {"messages_a": [self._call_model(state["messages_a"], spec.model, a_tools, usage)]}
 
         def agent_a_run_tools(state):
             last = state["messages_a"][-1]
@@ -232,7 +237,7 @@ class MultiAgentAdapter:
             return {"messages_b": _b_seed_messages(summary, user_message, actor_prompt)}
 
         def agent_b_call_model(state):
-            return {"messages_b": [self._call_model(state["messages_b"], spec.model, b_tools)]}
+            return {"messages_b": [self._call_model(state["messages_b"], spec.model, b_tools, usage)]}
 
         def agent_b_run_tools(state):
             last = state["messages_b"][-1]
@@ -287,7 +292,8 @@ class MultiAgentAdapter:
             # raw_loop and langgraph when their budget runs out).
             b_final_output = ""
 
-        return NormalizedTrace(steps=a_steps + b_steps, final_output=b_final_output, stop_reason=stop_reason)
+        return NormalizedTrace(steps=a_steps + b_steps, final_output=b_final_output, stop_reason=stop_reason,
+                               **usage.fields())
 
 
 def _b_seed_messages(

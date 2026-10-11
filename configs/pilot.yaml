@@ -7,6 +7,7 @@ attacks: [no_attack, metadata_exfil, iterative]
 defenses: [null, outbound_guard, quarantined_reader, spotlighting+recipient_allowlist]
 seeds: [0, 1]
 limits:
+  max_tokens_per_run: 20000000   # hard stop; about 3x the estimate
   max_turns: 5
   campaign_budget: 4
   max_concurrency: 8

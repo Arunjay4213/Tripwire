@@ -703,3 +703,41 @@ def test_no_attack_control_measures_a_defenses_own_utility_cost(tmp_path, monkey
     decoys = {s.decoy_recipient for s in SCENARIOS.values()}
     assert not any(d in json.dumps(provider.requests) for d in decoys)
     assert "no_attack" in out
+
+
+# --- cost accounting and the token cap ---------------------------------------------------
+
+def test_every_result_carries_what_it_cost_and_the_served_model(tmp_path, monkeypatch, capsys, provider):
+    """The fake provider bills 1 prompt + 1 completion token per call and
+    echoes the model id, so per-episode counts are exact: a single agent
+    makes 3 calls (read, send, final), the guard adds its own call under
+    outbound_guard, and a PAIR campaign records the attacker's tokens."""
+    monkeypatch.setenv("GUARD_MODEL", "fake/guard-block")
+    monkeypatch.setenv("ATTACKER_MODEL", "fake/attacker")
+    code, out, err, results = _run_cli(
+        tmp_path, monkeypatch, capsys, provider,
+        _config(adapters=["raw_loop"], attacks=["metadata_exfil", "iterative"],
+                defenses=["null", "outbound_guard"], campaign_budget=2),
+    )
+    assert code == 0, err
+    by_defense = {e["defense"]: e for e in results["episodes"]}
+    plain, guarded = by_defense["no_defense"], by_defense["outbound_guard"]
+    assert plain["model_calls"] == 3 and plain["prompt_tokens"] == 3 and plain["completion_tokens"] == 3
+    assert plain["served_model"] == "fake/obedient"
+    assert plain["defense_calls"] == 0 and plain["defense_tokens"] == 0
+    assert guarded["defense_calls"] == 1 and guarded["defense_tokens"] == 2
+    campaign = next(c for c in results["campaigns"] if c["defense"] == "no_defense")
+    assert campaign["broke"] is True and campaign["target_model_calls"] == 3
+    assert campaign["attacker_tokens"] == 2  # one attacker call, 1 + 1
+    assert "tokens" in out  # the new column is in both tables
+
+
+def test_token_cap_from_the_config_stops_the_sweep_and_is_reported(tmp_path, monkeypatch, capsys, provider):
+    # Four cells (one per scenario) at about 7 tokens each; the cap is checked
+    # between cells, so the first two run and the last two are reported as not run.
+    cfg = _config(adapters=["raw_loop"], scenarios=["invoice", "helpdesk", "calendar", "expense"]).replace(
+        "limits:\n", "limits:\n  max_tokens_per_run: 10\n", 1)
+    code, out, err, results = _run_cli(tmp_path, monkeypatch, capsys, provider, cfg)
+    assert code == 0, err
+    assert len(results) == 2, [r["scenario"] for r in results]  # what ran is kept
+    assert "token cap reached" in err and "2 of 4 cells were NOT run" in err

@@ -39,6 +39,33 @@ from .base import ToolCallGuard, ToolResultWrapper
 RAW_ARGS_KEY = "__raw__"
 
 
+@dataclass
+class Usage:
+    """What one adapter run cost: model calls, tokens, and the model id the
+    provider actually served (Azure answers "gpt-5.6-luna-2026-07-09" for a
+    deployment named "gpt-5.6-luna"; that version belongs in the results).
+    Tolerant of responses with no usage or model field (test doubles)."""
+
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    model_calls: int = 0
+    served_model: str = ""
+
+    def record(self, response: Any) -> None:
+        self.model_calls += 1
+        usage = getattr(response, "usage", None)
+        if usage is not None:
+            self.prompt_tokens += int(getattr(usage, "prompt_tokens", 0) or 0)
+            self.completion_tokens += int(getattr(usage, "completion_tokens", 0) or 0)
+        served = getattr(response, "model", None)
+        if isinstance(served, str) and served:
+            self.served_model = served
+
+    def fields(self) -> dict[str, Any]:
+        return {"prompt_tokens": self.prompt_tokens, "completion_tokens": self.completion_tokens,
+                "model_calls": self.model_calls, "served_model": self.served_model}
+
+
 def parse_tool_args(raw_arguments: str | None) -> dict[str, Any]:
     """Parse a tool call's raw argument string into a dict, never raising.
 

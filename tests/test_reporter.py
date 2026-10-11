@@ -62,10 +62,10 @@ def test_print_asr_table_exact_row(capsys):
     out = capsys.readouterr().out
     assert out.splitlines()[0].split() == [
         "adapter", "model", "scenario", "attack", "defense", "n", "leak", "ASR",
-        "95%", "CI", "utility", "err", "max_turns"]
+        "95%", "CI", "utility", "err", "max_turns", "tokens"]
     assert _rows(out) == [
         ["raw_loop", "llama", "invoice", "fixed", "no_defense", "3", "2", "67%",
-         "[21%, 94%]", "0%", "0", "0"],
+         "[21%, 94%]", "0%", "0", "0", "0"],
     ]
 
 
@@ -176,7 +176,7 @@ def test_asr_table_excludes_errors_from_n_and_counts_them(capsys):
     out = capsys.readouterr().out
     (row,) = _rows(out)
     # n=2 scored (not 5), 1 leak -> 50%, utility 1/2, 3 errors, 1 hit max_turns.
-    assert row[5:] == ["2", "1", "50%", "[9%, 91%]", "50%", "3", "1"]
+    assert row[5:] == ["2", "1", "50%", "[9%, 91%]", "50%", "3", "1", "0"]  # tokens: none recorded
     assert "3 episode(s) errored" in out
     assert "1 episode(s) hit the max_turns budget" in out
 
@@ -184,7 +184,7 @@ def test_asr_table_excludes_errors_from_n_and_counts_them(capsys):
 def test_asr_table_cell_with_only_errors_shows_dashes(capsys):
     print_asr_table([_err()])
     (row,) = _rows(capsys.readouterr().out)
-    assert row[5:] == ["0", "0", "-", "-", "-", "1", "0"]
+    assert row[5:] == ["0", "0", "-", "-", "-", "1", "0", "-"]
 
 
 def test_security_report_skips_errored_runs(capsys):
@@ -221,4 +221,4 @@ def test_campaign_table_excludes_aborted_campaigns_and_shows_eval_errors(capsys)
     (row,) = _rows(capsys.readouterr().out)
     # n=2 scored (aborted one excluded), 1 broke, 1 aborted, 3 evaluation errors.
     assert row[6:9] == ["2", "1", "50%"]
-    assert row[-2:] == ["1", "3"]
+    assert row[-3:-1] == ["1", "3"]  # err, eval_err; the last column is tokens

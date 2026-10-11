@@ -101,6 +101,14 @@ class DefenseContext:
         return addresses_in(self.user_message)
 
 
+def response_tokens(response: Any) -> int:
+    """prompt + completion tokens of one provider response, 0 when absent."""
+    usage = getattr(response, "usage", None)
+    if usage is None:
+        return 0
+    return int(getattr(usage, "prompt_tokens", 0) or 0) + int(getattr(usage, "completion_tokens", 0) or 0)
+
+
 def bind_defense(defense: Any, ctx: DefenseContext) -> None:
     """Hand the episode's context to a defense that wants it (duck-typed
     `bind`); a no-op for defenses without one. Scenario.build_spec calls this

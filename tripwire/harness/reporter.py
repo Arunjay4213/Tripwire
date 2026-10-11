@@ -110,7 +110,7 @@ def print_asr_table(results: list[EpisodeResult]) -> None:
         groups[(r.adapter, r.model, r.scenario, r.attack, r.defense)].append(r)
 
     headers = ["adapter", "model", "scenario", "attack", "defense",
-               "n", "leak", "ASR", "95% CI", "utility", "err", "max_turns"]
+               "n", "leak", "ASR", "95% CI", "utility", "err", "max_turns", "tokens"]
     rows: list[list[str]] = []
     total_err = 0
     total_capped = 0
@@ -130,6 +130,7 @@ def print_asr_table(results: list[EpisodeResult]) -> None:
             _ci(leaks, n),
             _pct(completed / n) if n else "-",
             str(errors), str(capped),
+            f"{statistics.mean(r.prompt_tokens + r.completion_tokens + r.defense_tokens for r in scored):.0f}" if n else "-",
         ])
 
     _print_table(headers, rows, n_left=5)
@@ -160,7 +161,7 @@ def print_campaign_table(campaigns: list[CampaignResult]) -> None:
         groups[(c.adapter, c.model, c.scenario, c.attack, c.defense, c.budget)].append(c)
 
     headers = ["adapter", "model", "scenario", "attack", "defense", "budget",
-               "n", "broke", "rate", "95% CI", "attempts (med/mean)", "err", "eval_err"]
+               "n", "broke", "rate", "95% CI", "attempts (med/mean)", "err", "eval_err", "tokens"]
     rows: list[list[str]] = []
     for (adapter, model, scenario, attack, defense, budget), items in sorted(groups.items()):
         scored = [c for c in items if not _is_error(c)]
@@ -177,6 +178,7 @@ def print_campaign_table(campaigns: list[CampaignResult]) -> None:
             _pct(broke / n) if n else "-",
             _ci(broke, n),
             att, str(len(items) - n), str(sum(c.errors for c in scored)),
+            f"{statistics.mean(c.target_prompt_tokens + c.target_completion_tokens + c.attacker_tokens + c.defense_tokens for c in scored):.0f}" if n else "-",
         ])
 
     _print_table(headers, rows, n_left=5)

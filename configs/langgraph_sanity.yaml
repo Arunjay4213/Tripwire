@@ -8,5 +8,6 @@ attacks: [no_attack, metadata_exfil, mundane_redirect, prerequisite_mirror, guar
 defenses: [null, prompt_hardening, spotlighting, outbound_guard, recipient_allowlist, secret_egress_scan, quarantined_reader, spotlighting+recipient_allowlist]
 seeds: [0, 1, 2, 3, 4]
 limits:
+  max_tokens_per_run: 10000000   # hard stop; about 3x the estimate
   max_turns: 5
   max_concurrency: 16

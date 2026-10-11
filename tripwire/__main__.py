@@ -324,7 +324,7 @@ def main() -> None:
         episodes, campaigns = run_sweep(
             adapters, config.models, attacks, config.seeds, config.campaign_budget,
             config.defenses, config.scenarios, max_turns=config.max_turns,
-            concurrency=concurrency,
+            concurrency=concurrency, max_tokens=config.max_tokens_per_run,
         )
 
     # Ensure output directory exists

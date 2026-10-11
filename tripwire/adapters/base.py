@@ -81,6 +81,12 @@ class NormalizedTrace:
     # "max_turns" (turn budget exhausted), or "error" (adapter caught an
     # exception after some steps ran; the partial trace is still scored).
     stop_reason: StopReason = "done"
+    # What the run cost, from the provider's usage fields (0 when the adapter
+    # cannot see them, e.g. crewai), and the model id the provider served.
+    prompt_tokens: int = 0
+    completion_tokens: int = 0
+    model_calls: int = 0
+    served_model: str = ""
 
 
 @runtime_checkable
