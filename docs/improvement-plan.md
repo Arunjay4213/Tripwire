@@ -58,3 +58,42 @@ Attack side first.
 Defense side after that, starting with `bind(ctx)` and the two deterministic defenses. Not started.
 
 Done since this plan was written but outside its scope, see `test-audit-2026-10-11.md`: an end-to-end test layer, eleven measurement and robustness bugs fixed, and the test suite pruned.
+
+## Remaining work, split into three tracks
+
+Three tracks, chosen so that no track waits on another for code.
+The one cross-track rule: track 1 runs the baseline on today's `main` first, and every change from tracks 2 and 3 is measured against that baseline one at a time before it merges.
+
+### Track 1: measurement
+
+Owns the numbers.
+Nothing here changes an attack or a defense; it makes the other two tracks' results trustworthy.
+
+1. Fresh baseline sweep on `main` as of 2026-10-11: three adapters, four scenarios, every attack, every defense, 30 seeds per cell, on the deployed models (`gpt-4.1-mini`, `DeepSeek-V4-Pro`, `gpt-5.6-luna`).
+2. No-attack control run, so a defense's utility cost can be separated from attack disruption.
+3. Replay library, so a tree-search win at temperature can be checked for luck.
+4. Stacked defenses as a measurement feature (a composite that applies several rungs), so L1+L2 and L2+allowlist cells exist when track 3 lands.
+5. Rewrite `findings.md` from the new results and refresh the deck numbers.
+
+### Track 2: attack side, second wave
+
+Owns attack strength and realism.
+All four items are independent of track 3 and of each other.
+
+1. Lift the verbatim-only constraint in the PAIR and TAP prompts; the judge already detects encoded and split leaks.
+2. Remove oracle knowledge of the secret label from every attack.
+3. Port AgentDojo's `tool_knowledge` attack.
+4. Injection slots: position within the tool result, a bounce message mid-action, and the tool description. Highest cost, last.
+
+### Track 3: defense side
+
+Owns the "here is the fix" result.
+Item 1 is the enabler and goes first; items 2 and 3 are the headline and come next; the rest in order of expected effect over cost.
+
+1. `bind(ctx)` hook on Defense, so a defense learns the scenario's authorized recipients and read tool before the episode.
+2. `recipient_allowlist` and `secret_egress_scan`, the two deterministic rungs.
+3. Guard hardening: authorized recipients in the guard's input and a deterministic pre-check before the model call.
+4. Agent B coverage in multi_agent, which flips the expected failure in `tests/test_e2e.py`.
+5. L1/L2 wording: recipient anchoring, datamarking, sandwich.
+6. Taint tracking.
+7. Quarantined reader, only if time remains.
