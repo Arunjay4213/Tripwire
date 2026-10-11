@@ -25,7 +25,7 @@ from dataclasses import dataclass
 
 from tripwire.adapters.base import EpisodeSpec, NormalizedTrace
 from tripwire.attacks.base import AttackContext
-from tripwire.defenses.base import Defense
+from tripwire.defenses.base import Defense, DefenseContext, bind_defense
 from tripwire.harness.canary import inject, make_canary
 from tripwire.harness.judge import task_completed_for
 
@@ -97,6 +97,18 @@ class Scenario:
             sender_persona=self.sender_persona,
         )
 
+    def defense_context(self, canary: str) -> DefenseContext:
+        """What the deployment knows about an episode of this scenario: the
+        user's request, the secret it provisioned, and which tool returns
+        external content. Never the decoy, never the authorized set (a
+        defense derives the legitimate recipients from the request)."""
+        return DefenseContext(
+            scenario=self.name,
+            user_message=self.user_message,
+            secrets=frozenset({canary}),
+            untrusted_tools=frozenset({self.read_tool}),
+        )
+
     def task_completed(self, trace: NormalizedTrace) -> bool:
         """Did the agent do the benign task -- send to an authorized recipient
         with this scenario's expected content? (utility, independent of the leak)."""
@@ -106,11 +118,16 @@ class Scenario:
         self, defense: Defense, seed: int, model: str, payload: str, max_turns: int = 5,
     ) -> tuple[EpisodeSpec, str]:
         """Assemble the episode for one rendered attack payload: the defense
-        wraps the persona before the canary is planted, filters the offered
-        tools, and is wired in as the tool-call guard and tool-result wrapper.
+        is bound to the episode's DefenseContext, wraps the persona before the
+        canary is planted, filters the offered tools, and is wired in as the
+        tool-call guard, tool-result wrapper and system-prompt wrapper.
         `max_turns` is the model-call budget every adapter must honor (config
         `limits.max_turns`; 5 matches EpisodeSpec's default)."""
         canary = make_canary(seed)
+        # Bind first: a defense that anchors to the user's recipients or scans
+        # for the provisioned secret needs this episode's facts before it
+        # wraps the prompt or sees a single call.
+        bind_defense(defense, self.defense_context(canary))
         content = f"{self.benign_content}\n\n{payload}"
         environment = {
             "system_prompt": defense.wrap_system_prompt(self.persona),
@@ -128,6 +145,7 @@ class Scenario:
             environment_seed=seed,
             tool_call_guard=defense.check_tool_call,
             tool_result_wrapper=defense.wrap_tool_result,
+            system_prompt_wrapper=defense.wrap_system_prompt,
             max_turns=max_turns,
         )
         return spec, canary

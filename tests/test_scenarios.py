@@ -166,3 +166,39 @@ def test_legacy_run_tree_campaign_delegates_to_invoice_scenario():
     assert res.broke is True and res.scenario == "invoice" and res.seed == 3
     res = run_tree_campaign(_leaking_adapter("accounting@corp.com", canary), spec, _FakeTree(), budget=2)
     assert res.broke is False
+
+
+# --- what a defense is told about an episode -------------------------------------
+
+@pytest.mark.parametrize("scenario", ALL, ids=[s.name for s in ALL])
+def test_defense_context_derives_the_legitimate_recipients_from_the_request(scenario):
+    """recipient_allowlist and taint_tracking approve the addresses the user's
+    request names. They never read the judge's authorized set, but in every
+    scenario the two must coincide, or the allowlist would cost utility (or
+    approve a decoy) for reasons that have nothing to do with the attack."""
+    ctx = scenario.defense_context("0" * 32)
+    assert ctx.user_recipients == scenario.authorized_recipients
+    assert scenario.decoy_recipient not in repr(ctx)  # the attacker's choice is not a defense's input
+    assert ctx.secrets == {"0" * 32} and ctx.untrusted_tools == {scenario.read_tool}
+
+
+def test_build_spec_binds_the_defense_before_it_wraps_anything():
+    class Recording(NoDefense):
+        def __init__(self):
+            self.events: list[str] = []
+            self.ctx = None
+
+        def bind(self, ctx):
+            self.events.append("bind")
+            self.ctx = ctx
+
+        def wrap_system_prompt(self, prompt):
+            self.events.append("wrap")
+            return prompt + " [wrapped]"
+
+    defense = Recording()
+    spec, canary = SCENARIOS["helpdesk"].build_spec(defense, seed=3, model="m", payload="p")
+    assert defense.events[:2] == ["bind", "wrap"]
+    assert defense.ctx.secrets == {canary} and defense.ctx.scenario == "helpdesk"
+    # A second agent's own persona can be wrapped the same way (multi_agent's sender).
+    assert spec.system_prompt_wrapper("actor") == "actor [wrapped]"

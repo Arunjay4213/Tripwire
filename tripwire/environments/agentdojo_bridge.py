@@ -39,7 +39,7 @@ from agentdojo.task_suite.load_suites import get_suite
 from agentdojo.types import text_content_block_from_string
 
 from tripwire.adapters.base import Adapter, EpisodeSpec, NormalizedTrace
-from tripwire.defenses.base import Defense, NoDefense
+from tripwire.defenses.base import DEFAULT_SINK_TOOLS, Defense, DefenseContext, NoDefense, bind_defense
 from tripwire.harness.runner import EpisodeResult
 
 # A plain tool-using-assistant system prompt. AgentDojo's own pipeline uses a
@@ -129,6 +129,14 @@ class AgentDojoEpisode:
 
     def build_spec(self, defense: Defense, seed: int) -> EpisodeSpec:
         tool_schemas = [_function_to_openai(f) for f in self.runtime.functions.values()]
+        # What the deployment knows: the user's request and which tools read
+        # external content. No planted secret here (AgentDojo scores its own
+        # injection goals), so secret_egress_scan has nothing to look for.
+        bind_defense(defense, DefenseContext(
+            scenario="agentdojo",
+            user_message=self.user_task.PROMPT,
+            untrusted_tools=frozenset(self.runtime.functions) - DEFAULT_SINK_TOOLS,
+        ))
         environment = {
             "system_prompt": defense.wrap_system_prompt(AGENTDOJO_SYSTEM_PROMPT),
             "user_message": self.user_task.PROMPT,
