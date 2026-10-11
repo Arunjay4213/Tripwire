@@ -1,9 +1,9 @@
-"""Tests for the LangGraph adapter — LangGraphAdapter.run().
+"""Tests for the LangGraph adapter that are specific to its request building.
 
-The Groq/OpenAI client is mocked so these tests run offline and
-deterministically: we hand-script two model turns (one tool call, then a
-final answer) and check the adapter turns them into the right
-NormalizedTrace, per the Adapter contract in tripwire/adapters/base.py.
+Everything the adapter shares with the other loops (tool round trips, guard
+denial, hallucinated tools, malformed arguments, the turn budget) is asserted
+across adapters in tests/test_adapter_parity.py; this file keeps only what
+that file does not pin for LangGraph.
 
 spec.task/spec.tools follow the same shape raw_loop.py expects (see
 tests/test_raw_loop.py) so both adapters plug into runner.run_episode()
@@ -13,202 +13,16 @@ is a plain OpenAI function-calling JSON schema list.
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import MagicMock
-
+from tests.scripted_client import ScriptedClient, message
 from tripwire.adapters.base import EpisodeSpec
 from tripwire.adapters.langgraph_adapter import LangGraphAdapter
-
-
-def _fake_response(content=None, tool_calls=None):
-    """Build an object shaped like OpenAI's ChatCompletion, just deep enough
-    for the fields _call_model actually reads."""
-    message = SimpleNamespace(content=content, tool_calls=tool_calls)
-    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
-
-
-def _fake_tool_call(call_id, name, arguments):
-    return SimpleNamespace(id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
-
-
-ECHO_SCHEMA = {
-    "type": "function",
-    "function": {
-        "name": "echo",
-        "description": "Echoes a message back.",
-        "parameters": {
-            "type": "object",
-            "properties": {"msg": {"type": "string"}},
-            "required": ["msg"],
-        },
-    },
-}
-
-
-def _echo(msg: str) -> str:
-    return f"echo: {msg}"
-
-
-def test_run_records_tool_call_tool_result_and_model_output():
-    adapter = LangGraphAdapter(client=MagicMock())
-
-    # Turn 1: model asks for the echo tool. Turn 2: model gives a final answer.
-    adapter.client.chat.completions.create = MagicMock(
-        side_effect=[
-            _fake_response(
-                content=None,
-                tool_calls=[_fake_tool_call("call_1", "echo", '{"msg": "hi"}')],
-            ),
-            _fake_response(content="done", tool_calls=None),
-        ]
-    )
-
-    spec = EpisodeSpec(
-        task={
-            "system_prompt": "You are a test agent.",
-            "user_message": "Say hi via the echo tool.",
-            "tool_impls": {"echo": _echo},
-        },
-        tools=[ECHO_SCHEMA],
-        model="fake-model",
-        environment_seed=0,
-    )
-
-    trace = adapter.run(spec)
-
-    assert [s.type for s in trace.steps] == ["tool_call", "tool_result", "model_output"]
-
-    tool_call, tool_result, model_output = trace.steps
-
-    assert tool_call.name == "echo"
-    assert tool_call.args == {"msg": "hi"}
-
-    assert tool_result.name == "echo"
-    assert tool_result.content == "echo: hi"
-
-    assert model_output.content == "done"
-    assert trace.final_output == "done"
-
-    # Steps are numbered in order.
-    assert [s.step for s in trace.steps] == [0, 1, 2]
-
-    # Only two model turns were needed -- one tool round trip, one final answer.
-    assert adapter.client.chat.completions.create.call_count == 2
-
-
-def test_blocked_call_never_executes_real_tool():
-    """Mid-loop enforcement: spec.tool_call_guard is checked before execution."""
-    adapter = LangGraphAdapter(client=MagicMock())
-    adapter.client.chat.completions.create = MagicMock(
-        side_effect=[
-            _fake_response(
-                content=None,
-                tool_calls=[_fake_tool_call("call_1", "echo", '{"msg": "hi"}')],
-            ),
-            _fake_response(content="done", tool_calls=None),
-        ]
-    )
-
-    executed = []
-
-    def echo(msg: str) -> str:
-        executed.append(msg)  # would prove a real leak if this ran
-        return f"echo: {msg}"
-
-    def guard(name, args):
-        return False, f"blocked: {name}"
-
-    spec = EpisodeSpec(
-        task={
-            "system_prompt": "You are a test agent.",
-            "user_message": "Say hi via the echo tool.",
-            "tool_impls": {"echo": echo},
-        },
-        tools=[ECHO_SCHEMA],
-        model="fake-model",
-        environment_seed=0,
-        tool_call_guard=guard,
-    )
-
-    trace = adapter.run(spec)
-
-    assert executed == []  # the real tool never ran
-    tool_result = trace.steps[1]
-    assert tool_result.type == "tool_blocked"
-    assert tool_result.content == "blocked: echo"
-
-
-def test_allowed_call_executes_normally_with_guard_present():
-    adapter = LangGraphAdapter(client=MagicMock())
-    adapter.client.chat.completions.create = MagicMock(
-        side_effect=[
-            _fake_response(
-                content=None,
-                tool_calls=[_fake_tool_call("call_1", "echo", '{"msg": "hi"}')],
-            ),
-            _fake_response(content="done", tool_calls=None),
-        ]
-    )
-
-    def guard(name, args):
-        return True, ""
-
-    spec = EpisodeSpec(
-        task={
-            "system_prompt": "You are a test agent.",
-            "user_message": "Say hi via the echo tool.",
-            "tool_impls": {"echo": _echo},
-        },
-        tools=[ECHO_SCHEMA],
-        model="fake-model",
-        environment_seed=0,
-        tool_call_guard=guard,
-    )
-
-    trace = adapter.run(spec)
-
-    assert trace.steps[1].content == "echo: hi"
-
-
-def test_hallucinated_tool_is_blocked_not_crashed():
-    """A model can free-form a tool name the agent was never given (e.g. a
-    defense filtered it out). That must produce a tool_blocked step, not a
-    KeyError -- matching MultiAgentAdapter's handling."""
-    adapter = LangGraphAdapter(client=MagicMock())
-    adapter.client.chat.completions.create = MagicMock(
-        side_effect=[
-            _fake_response(
-                content=None,
-                tool_calls=[_fake_tool_call("call_1", "ghost_tool", '{"msg": "hi"}')],
-            ),
-            _fake_response(content="done", tool_calls=None),
-        ]
-    )
-
-    spec = EpisodeSpec(
-        task={
-            "system_prompt": "You are a test agent.",
-            "user_message": "Do something.",
-            "tool_impls": {"echo": _echo},  # ghost_tool is NOT here
-        },
-        tools=[ECHO_SCHEMA],
-        model="fake-model",
-        environment_seed=0,
-    )
-
-    trace = adapter.run(spec)  # must not raise
-
-    blocked = trace.steps[1]
-    assert blocked.type == "tool_blocked"
-    assert "not available" in blocked.content
 
 
 def test_empty_tool_list_omits_tools_kwarg():
     """A tool_filter defense can strip every tool. Sending tools=[] makes most
     OpenAI-compatible endpoints 400, so the adapter must omit the kwarg."""
-    adapter = LangGraphAdapter(client=MagicMock())
-    create = MagicMock(return_value=_fake_response(content="text only", tool_calls=None))
-    adapter.client.chat.completions.create = create
+    client = ScriptedClient(script=[message("text only")])
+    adapter = LangGraphAdapter(client=client)
 
     spec = EpisodeSpec(
         task={
@@ -223,14 +37,11 @@ def test_empty_tool_list_omits_tools_kwarg():
 
     adapter.run(spec)
 
-    assert "tools" not in create.call_args.kwargs
+    assert "tools" not in client.requests[-1]
 
 
 def test_run_with_no_tool_calls_returns_single_model_output_step():
-    adapter = LangGraphAdapter(client=MagicMock())
-    adapter.client.chat.completions.create = MagicMock(
-        return_value=_fake_response(content="just an answer", tool_calls=None)
-    )
+    adapter = LangGraphAdapter(client=ScriptedClient(script=[message("just an answer")]))
 
     spec = EpisodeSpec(
         task={
@@ -248,130 +59,3 @@ def test_run_with_no_tool_calls_returns_single_model_output_step():
     assert len(trace.steps) == 1
     assert trace.steps[0].type == "model_output"
     assert trace.final_output == "just an answer"
-
-
-def _looping_adapter() -> LangGraphAdapter:
-    """An adapter whose model asks for the echo tool forever."""
-    adapter = LangGraphAdapter(client=MagicMock())
-    adapter.client.chat.completions.create = MagicMock(
-        return_value=_fake_response(
-            content=None,
-            tool_calls=[_fake_tool_call("call_1", "echo", '{"msg": "again"}')],
-        )
-    )
-    return adapter
-
-
-def _echo_spec(max_turns: int = 5) -> EpisodeSpec:
-    return EpisodeSpec(
-        task={
-            "system_prompt": "You are a test agent.",
-            "user_message": "Echo.",
-            "tool_impls": {"echo": _echo},
-        },
-        tools=[ECHO_SCHEMA],
-        model="fake-model",
-        environment_seed=0,
-        max_turns=max_turns,
-    )
-
-
-def test_tool_loop_stops_at_spec_max_turns_with_partial_trace():
-    """Before: no recursion_limit, so a looping model made thousands of
-    calls and GraphRecursionError escaped run(), losing the whole trace."""
-    adapter = _looping_adapter()
-
-    trace = adapter.run(_echo_spec(max_turns=4))
-
-    assert adapter.client.chat.completions.create.call_count == 4
-    assert trace.stop_reason == "max_turns"
-    assert trace.final_output == ""
-    assert [s.type for s in trace.steps] == ["tool_call", "tool_result"] * 4
-
-
-def test_recursion_limit_mapping():
-    from tripwire.adapters.langgraph_adapter import recursion_limit_for
-
-    # call_model + run_tools per turn.
-    assert recursion_limit_for(1) == 2
-    assert recursion_limit_for(5) == 10
-
-
-def test_final_answer_is_done():
-    adapter = LangGraphAdapter(client=MagicMock())
-    adapter.client.chat.completions.create = MagicMock(return_value=_fake_response(content="ok"))
-
-    trace = adapter.run(_echo_spec())
-
-    assert trace.stop_reason == "done"
-    assert trace.final_output == "ok"
-
-
-def test_malformed_args_are_preserved_not_rewritten_to_empty():
-    """Before: parse_tool_args turned bad JSON into {} and the tool still ran,
-    so a truncated send_email carrying the canary was invisible to the judge."""
-    executed = []
-
-    def echo(**kwargs):
-        executed.append(kwargs)
-        return "echo"
-
-    raw = '{"msg": "CANARY-abc'
-    adapter = LangGraphAdapter(client=MagicMock())
-    adapter.client.chat.completions.create = MagicMock(
-        side_effect=[
-            _fake_response(tool_calls=[_fake_tool_call("call_1", "echo", raw)]),
-            _fake_response(content="done"),
-        ]
-    )
-    spec = _echo_spec()
-    spec.task["tool_impls"] = {"echo": echo}
-
-    trace = adapter.run(spec)
-
-    assert trace.steps[0].args == {"__raw__": raw}
-    assert trace.steps[1].type == "tool_blocked"
-    assert executed == []
-
-
-def test_tool_exception_is_fed_back_not_raised():
-    def broken(msg: str) -> str:
-        raise RuntimeError("down")
-
-    adapter = LangGraphAdapter(client=MagicMock())
-    adapter.client.chat.completions.create = MagicMock(
-        side_effect=[
-            _fake_response(tool_calls=[_fake_tool_call("call_1", "echo", '{"msg": "hi"}')]),
-            _fake_response(content="done"),
-        ]
-    )
-    spec = _echo_spec()
-    spec.task["tool_impls"] = {"echo": broken}
-
-    trace = adapter.run(spec)
-
-    assert trace.steps[1].type == "tool_result"
-    assert trace.steps[1].content == "tool error: RuntimeError: down"
-    assert trace.final_output == "done"
-
-
-def test_text_alongside_tool_calls_is_recorded():
-    adapter = LangGraphAdapter(client=MagicMock())
-    adapter.client.chat.completions.create = MagicMock(
-        side_effect=[
-            _fake_response(content="Echoing now.", tool_calls=[_fake_tool_call("call_1", "echo", '{"msg": "hi"}')]),
-            _fake_response(content="done"),
-        ]
-    )
-
-    trace = adapter.run(_echo_spec())
-
-    assert [s.type for s in trace.steps] == ["model_output", "tool_call", "tool_result", "model_output"]
-    assert trace.steps[0].content == "Echoing now."
-
-
-def test_module_does_not_load_dotenv_on_import():
-    """Importing a library module must not copy a .env into os.environ."""
-    import tripwire.adapters.langgraph_adapter as module
-
-    assert "load_dotenv" not in vars(module)

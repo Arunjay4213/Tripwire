@@ -29,13 +29,11 @@ What "structurally equivalent" means here, precisely:
 
 from __future__ import annotations
 
-from types import SimpleNamespace
-from unittest.mock import MagicMock
-
 import pytest
 
-from tripwire.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
 from tests.fake_crewai import FakeCrewAI
+from tests.scripted_client import ScriptedClient, message, tool_call
+from tripwire.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
 from tripwire.adapters.crewai_adapter import CrewAIAdapter
 from tripwire.adapters.langgraph_adapter import LangGraphAdapter
 from tripwire.adapters.multi_agent_adapter import MultiAgentAdapter
@@ -86,16 +84,7 @@ def _spec(tool_call_guard=None, tools=None):
     )
 
 
-# --- fake OpenAI-shaped responses --------------------------------------------
-
-def _response(content=None, tool_calls=None):
-    message = SimpleNamespace(content=content, tool_calls=tool_calls)
-    return SimpleNamespace(choices=[SimpleNamespace(message=message)])
-
-
-def _call(call_id, name, arguments):
-    return SimpleNamespace(id=call_id, function=SimpleNamespace(name=name, arguments=arguments))
-
+# --- scripted model transcripts ----------------------------------------------
 
 def _send_args(recipient: str, body: str) -> str:
     import json
@@ -106,44 +95,37 @@ def _single_agent_script(recipient: str, body: str):
     """read_inbox -> send_email -> final text. Consumed identically by
     raw_loop and langgraph."""
     return [
-        _response(tool_calls=[_call("c1", "read_inbox", "{}")]),
-        _response(tool_calls=[_call("c2", "send_email", _send_args(recipient, body))]),
-        _response(content="All done."),
+        message(tool_calls=[tool_call("c1", "read_inbox", "{}")]),
+        message(tool_calls=[tool_call("c2", "send_email", _send_args(recipient, body))]),
+        message(content="All done."),
     ]
 
 
 def _relay_script(recipient: str, body: str):
     """The same behavior split across the relay: A reads and summarizes, B sends."""
     return [
-        _response(tool_calls=[_call("c1", "read_inbox", "{}")]),
-        _response(content=f"Summary: {INBOX_TEXT} (instance id {CANARY})"),
-        _response(tool_calls=[_call("c2", "send_email", _send_args(recipient, body))]),
-        _response(content="All done."),
+        message(tool_calls=[tool_call("c1", "read_inbox", "{}")]),
+        message(content=f"Summary: {INBOX_TEXT} (instance id {CANARY})"),
+        message(tool_calls=[tool_call("c2", "send_email", _send_args(recipient, body))]),
+        message(content="All done."),
     ]
 
 
 # --- run one episode per adapter ---------------------------------------------
 
 def _run_raw_loop(recipient, body, guard=None) -> NormalizedTrace:
-    client = MagicMock()
-    client.chat.completions.create = MagicMock(side_effect=_single_agent_script(recipient, body))
+    client = ScriptedClient(script=_single_agent_script(recipient, body))
     return RawLoopAdapter(client).run(_spec(tool_call_guard=guard))
 
 
 def _run_langgraph(recipient, body, guard=None) -> NormalizedTrace:
-    adapter = LangGraphAdapter()
-    adapter.client.chat.completions.create = MagicMock(
-        side_effect=_single_agent_script(recipient, body)
-    )
-    return adapter.run(_spec(tool_call_guard=guard))
+    client = ScriptedClient(script=_single_agent_script(recipient, body))
+    return LangGraphAdapter(client=client).run(_spec(tool_call_guard=guard))
 
 
 def _run_multi_agent(recipient, body, guard=None) -> NormalizedTrace:
-    adapter = MultiAgentAdapter()
-    adapter.client.chat.completions.create = MagicMock(
-        side_effect=_relay_script(recipient, body)
-    )
-    return adapter.run(_spec(tool_call_guard=guard))
+    client = ScriptedClient(script=_relay_script(recipient, body))
+    return MultiAgentAdapter(client=client).run(_spec(tool_call_guard=guard))
 
 
 def _run_crewai(recipient, body, guard=None) -> NormalizedTrace:

