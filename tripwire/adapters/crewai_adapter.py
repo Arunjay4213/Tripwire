@@ -47,10 +47,6 @@ _INSTALL_HINT = (
     "    pip install crewai"
 )
 
-# Matches RawLoopAdapter's cap: bound the agent loop so a model that never
-# stops calling tools cannot hang a sweep.
-DEFAULT_MAX_ITERATIONS = 5
-
 # JSON-schema type -> Python annotation for the generated args model. Anything
 # unlisted falls back to Any, which accepts whatever the model emits rather than
 # failing validation and losing the episode.
@@ -120,9 +116,17 @@ class _ToolRecorder:
             if not allowed:
                 return self._blocked(name, message)
 
-        result = str(impl(**args))
-        if self._wrapper is not None:
-            result = self._wrapper(name, result)
+        # Same policy as _common.execute_tool_call: a failing tool is fed back
+        # to the model as a tool_result (never raised into the framework, which
+        # would leave a tool_call with no outcome), and the wrapper runs only
+        # on real tool output, never on harness text.
+        try:
+            result = str(impl(**args))
+        except Exception as exc:  # noqa: BLE001 - any tool failure is fed back to the model
+            result = f"tool error: {type(exc).__name__}: {exc}"
+        else:
+            if self._wrapper is not None:
+                result = self._wrapper(name, result)
         self.steps.append(
             TraceStep(step=len(self.steps), type="tool_result", name=name, content=result)
         )
@@ -182,7 +186,11 @@ def _build_tool(schema: dict[str, Any], recorder: _ToolRecorder):
         args_schema: type = schema_model
 
         def _run(self, **kwargs: Any) -> str:
-            return recorder.invoke(tool_name, kwargs)
+            # CrewAI validates against args_schema and passes every field,
+            # so an optional the model never set arrives as None. Drop those:
+            # the tool impls take only what the model actually sent, as in
+            # every other adapter.
+            return recorder.invoke(tool_name, {k: v for k, v in kwargs.items() if v is not None})
 
     return _TripwireTool()
 
@@ -192,7 +200,10 @@ class CrewAIAdapter:
 
     name = "crewai"
 
-    def __init__(self, max_iterations: int = DEFAULT_MAX_ITERATIONS) -> None:
+    def __init__(self, max_iterations: int | None = None) -> None:
+        """``max_iterations`` overrides ``spec.max_turns`` when given (the
+        same override RawLoopAdapter offers); leave it None so every adapter
+        runs on the shared per-episode budget."""
         # No CrewAI import here on purpose: resolve_adapters() constructs every
         # registered adapter, and constructing this one must not require the
         # optional dependency. The import happens in run().
@@ -231,15 +242,18 @@ class CrewAIAdapter:
         # strip every tool, leaving an agent that can only produce text.
         tools = [_build_tool(schema, recorder) for schema in (spec.tools or [])]
 
+        max_turns = self._max_iterations if self._max_iterations is not None else spec.max_turns
         agent = crewai.Agent(
-            role="Email assistant",
+            # Scenario-neutral: the persona (and the planted id) live in the
+            # system prompt the harness built, which goes to backstory.
+            role="Assistant",
             goal=env["user_message"],
             backstory=env["system_prompt"],  # see module docstring: no raw system slot
             tools=tools,
             llm=self._llm(spec.model),
             allow_delegation=False,
             verbose=False,
-            max_iter=self._max_iterations,
+            max_iter=max_turns,
         )
         task = crewai.Task(
             description=env["user_message"],
@@ -251,4 +265,10 @@ class CrewAIAdapter:
         output = crew.kickoff()
         final = str(getattr(output, "raw", output) or "")
         steps.append(TraceStep(step=len(steps), type="model_output", content=final))
-        return NormalizedTrace(steps=steps, final_output=final)
+        # CrewAI does not report whether max_iter cut the agent off. Each tool
+        # call costs one iteration, so a run that spent the whole budget on
+        # tool calls is recorded as capped, the way the other adapters record
+        # a loop that never produced a final answer.
+        tool_calls = sum(1 for s in steps if s.type == "tool_call")
+        stop_reason = "max_turns" if tool_calls >= max_turns else "done"
+        return NormalizedTrace(steps=steps, final_output=final, stop_reason=stop_reason)

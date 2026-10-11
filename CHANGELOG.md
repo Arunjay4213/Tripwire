@@ -5,7 +5,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+
+- **`outbound_guard` fails closed by default.**
+  When the guard's detector errors (provider error, no model, unparseable verdict) the call is now blocked instead of allowed; `outbound_guard: {fail_closed: false}` in the config restores the old behaviour.
+- **A guard outage is an error outcome, not a defended run.**
+  An episode whose guard errored and did not leak is recorded with `status: error`, so the ASR table, the security report, the `--strict` exit code and the CI gate all see it instead of counting it as "held".
+  A leak that got past a fail-open guard is still scored as a leak.
+  Adaptive campaigns treat such an attempt as an errored evaluation.
+- **A campaign whose every evaluation errored is `status: error`.**
+  It used to come back `ok` with `broke: false` and count as a defense win.
+- **The CrewAI adapter honors the shared per-episode budget** (`limits.max_turns`), records `stop_reason`, feeds a raising tool back as a `tool_result` like every other adapter, drops optional arguments the model never set (CrewAI forwards them as `None`), and uses a scenario-neutral role.
+
 ### Added
+
+- **End-to-end tests** (`tests/test_e2e.py`) that run the real CLI against an in-process OpenAI-compatible server with scripted agent policies (`tests/fake_provider.py`): config, sweep, adapters, SDK, defenses, judge, results file, tables, exit codes and the CI gate, with nothing stubbed inside the pipeline.
+- **An opt-in live smoke test** (`tests/test_live.py`, `TRIPWIRE_LIVE=1`) that CI now runs in place of the bare smoke command.
+- **Offline coverage of `CrewAIAdapter.run()`** through a stub `crewai` package (`tests/fake_crewai.py`); the cross-adapter equivalence tests now run the real adapter instead of hand-building its trace.
 
 - A **CrewAI adapter** (`adapters: [crewai]`), a third orchestration style behind the same `EpisodeSpec` -> `NormalizedTrace` contract, so the framework comparison covers a non-graph composition model.
   CrewAI is an optional extra (`pip install 'tripwire-eval[crewai]'`) imported lazily, so a core install is unaffected and listing an uninstalled adapter gives a clear message instead of an import error.

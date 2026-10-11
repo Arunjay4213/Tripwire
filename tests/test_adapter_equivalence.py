@@ -23,9 +23,8 @@ What "structurally equivalent" means here, precisely:
   JUDGE VERDICT.
 - crewai records at the tool boundary rather than from an OpenAI-shaped event
   stream (see crewai_adapter's module docstring), and CrewAI is not in the
-  `dev` extra, so it is exercised through the exact trace-construction path
-  run() uses -- _ToolRecorder plus the trailing model_output step -- with no
-  live crew and no network.
+  `dev` extra, so its real run() is driven over the stub framework in
+  tests/fake_crewai.py, which plays the same script -- no live crew, no network.
 """
 
 from __future__ import annotations
@@ -36,7 +35,8 @@ from unittest.mock import MagicMock
 import pytest
 
 from tripwire.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
-from tripwire.adapters.crewai_adapter import _ToolRecorder
+from tests.fake_crewai import FakeCrewAI
+from tripwire.adapters.crewai_adapter import CrewAIAdapter
 from tripwire.adapters.langgraph_adapter import LangGraphAdapter
 from tripwire.adapters.multi_agent_adapter import MultiAgentAdapter
 from tripwire.adapters.raw_loop import RawLoopAdapter
@@ -147,18 +147,12 @@ def _run_multi_agent(recipient, body, guard=None) -> NormalizedTrace:
 
 
 def _run_crewai(recipient, body, guard=None) -> NormalizedTrace:
-    """Reproduce CrewAIAdapter.run()'s trace construction without a live crew:
-    the recorder handles every tool call, then run() appends the final
-    model_output. See the module docstring for why this is the fair unit."""
-    spec = _spec(tool_call_guard=guard)
-    steps: list[TraceStep] = []
-    recorder = _ToolRecorder(
-        spec.task["tool_impls"], steps, spec.tool_call_guard, spec.tool_result_wrapper
-    )
-    recorder.invoke("read_inbox", {})
-    recorder.invoke("send_email", {"to": recipient, "body": body})
-    steps.append(TraceStep(step=len(steps), type="model_output", content="All done."))
-    return NormalizedTrace(steps=steps, final_output="All done.")
+    """The real CrewAIAdapter.run() over the stub framework in
+    tests/fake_crewai.py, which plays the same read-then-send script."""
+    with pytest.MonkeyPatch.context() as mp:
+        FakeCrewAI(script=[("read_inbox", {}), ("send_email", {"to": recipient, "body": body})],
+                   final="All done.").install(mp)
+        return CrewAIAdapter().run(_spec(tool_call_guard=guard))
 
 
 SINGLE_AGENT_RUNNERS = {"raw_loop": _run_raw_loop, "langgraph": _run_langgraph}
