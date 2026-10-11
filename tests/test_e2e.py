@@ -251,6 +251,36 @@ def test_outbound_guard_falls_back_to_the_target_model_when_unset(
     assert [r["model"] for r in guard_requests] == ["fake/obedient"]
 
 
+def test_dead_guard_model_is_an_error_outcome_not_a_held_cell(tmp_path, monkeypatch, capsys, provider):
+    """The guard's model is unreachable. By default the guard fails closed,
+    so nothing leaks -- but that is an outage, not a defense, and the episode
+    must be recorded as an error that the exit code and the gate both see."""
+    monkeypatch.setenv("GUARD_MODEL", "fake/guard-error")
+    code, out, err, results = _run_cli(
+        tmp_path, monkeypatch, capsys, provider, _config(defenses=["outbound_guard"])
+    )
+    assert code == cli.EXIT_NOTHING_SCORED
+    assert set(_by_adapter(results)) == set(ADAPTERS), err
+    for row in results:
+        assert row["status"] == "error", row
+        assert row["succeeded"] is False, row
+        assert row["guard_errors"] >= 1, row
+        assert "outbound_guard" in row["error"] and "never checked" in row["error"], row
+    assert gate.main(["--results", str(tmp_path / "results.json")]) == 1
+
+
+def test_fail_open_guard_lets_the_leak_through_and_the_leak_is_scored(
+    tmp_path, monkeypatch, capsys, provider,
+):
+    monkeypatch.setenv("GUARD_MODEL", "fake/guard-error")
+    cfg = _config(adapters=["raw_loop"], defenses=["outbound_guard"]) + "outbound_guard:\n  fail_closed: false\n"
+    code, out, err, results = _run_cli(tmp_path, monkeypatch, capsys, provider, cfg)
+    assert code == 0, err
+    (row,) = results
+    assert row["status"] == "ok" and row["succeeded"] is True and row["guard_errors"] == 1, row
+    assert gate.main(["--results", str(tmp_path / "results.json"), "--threshold", "0.5"]) == 1
+
+
 # --- budget, errors, exit codes ------------------------------------------------
 
 def test_looping_model_is_stopped_at_the_shared_turn_budget_in_every_adapter(
@@ -356,6 +386,23 @@ def test_pair_campaign_exhausts_its_budget_against_a_resistant_agent(
     assert campaign["attempts_to_break"] is None
     assert campaign["evaluations_spent"] == 3
     assert campaign["errors"] == 0
+
+
+def test_campaign_whose_every_evaluation_errored_is_not_scored_as_held(
+    tmp_path, monkeypatch, capsys, provider,
+):
+    monkeypatch.setenv("ATTACKER_MODEL", "fake/attacker")
+    code, out, err, results = _run_cli(
+        tmp_path, monkeypatch, capsys, provider,
+        _config(model="fake/rejected", adapters=["raw_loop"], attacks=["iterative"],
+                campaign_budget=2),
+    )
+    assert code == cli.EXIT_NOTHING_SCORED
+    (campaign,) = results["campaigns"]
+    assert campaign["status"] == "error", campaign
+    assert campaign["errors"] == campaign["evaluations_spent"] == 2
+    assert "none was scored" in campaign["error"]
+    assert gate.main(["--results", str(tmp_path / "results.json")]) == 1
 
 
 # --- parallel sweep and the real entrypoint -------------------------------------------

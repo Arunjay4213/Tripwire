@@ -18,7 +18,9 @@ The decision is selected by the model id in the request:
   fake/attacker    a PAIR/TAP attacker model: returns a structured refinement.
   fake/guard-block, fake/guard-allow
                    verdicts for the outbound_guard detector prompt.
-  fake/guard-error an HTTP 500 on every request (a dead guard model).
+  fake/guard-error an HTTP 400 on every request (a dead guard model; 400 so
+                   the SDK does not spend seconds retrying it the way it
+                   would a 5xx).
   fake/rejected    an HTTP 404 on every request (a model the provider does not
                    serve: the realistic misconfiguration).
 
@@ -125,7 +127,8 @@ class FakeProvider:
             return 404, {"error": {"message": f"The model `{model}` does not exist",
                                    "type": "invalid_request_error", "code": "model_not_found"}}
         if policy == "guard-error":
-            return 500, {"error": {"message": "guard model unavailable", "type": "server_error"}}
+            return 400, {"error": {"message": "guard model unavailable",
+                                   "type": "invalid_request_error"}}
 
         if messages and _text(messages[0].get("content")) == _DETECTOR_SYSTEM_PROMPT:
             return 200, self._completion(model, self._verdict(policy, messages))
