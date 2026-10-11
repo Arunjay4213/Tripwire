@@ -318,7 +318,7 @@ def main() -> None:
         print(f"Replaying {len(replay_cases)} frozen payload(s) with their discovery profiles")
         episodes, campaigns = run_replay_sweep(
             adapters, config.models, replay_cases, config.seeds, config.defenses,
-            max_turns=config.max_turns, concurrency=concurrency,
+            max_turns=config.max_turns, concurrency=concurrency, max_tokens=config.max_tokens_per_run,
         )
     else:
         episodes, campaigns = run_sweep(

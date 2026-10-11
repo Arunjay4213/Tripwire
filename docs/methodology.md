@@ -103,6 +103,12 @@ The `no_attack` row is a control, not an attack: an empty payload, so the read t
 Its utility under a defense is the defense's cost to the agent by itself.
 A defense's utility in an attacked row mixes that cost with the attack's own disruption; only the difference between the two rows separates them.
 
+### What a run costs
+
+Every episode records the target's model calls and tokens, the model id the provider served, and the tokens a model-based defense spent on its own calls; campaigns add the attacker's tokens.
+The tables show the mean per scored run, so the cost of a rung is a measured column next to its ASR and utility rather than an estimate.
+`limits.max_tokens_per_run` is a hard stop: the sweep stops scheduling cells once the total reaches it and says how many cells did not run.
+
 ## The adaptive attacker is not seed-reproducible
 
 The single-shot templated attacks are deterministic: a fixed `environment_seed` fixes the canary and the environment content, so a re-run of the same seed is a genuine independent trial, not a duplicate.

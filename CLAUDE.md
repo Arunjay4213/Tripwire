@@ -55,6 +55,7 @@ Published on PyPI as `tripwire-eval` (the import package and CLI stay `tripwire`
 - `reporter.py` - `print_asr_table()` (grouped by adapter/scenario/attack/defense, Wilson CI), `print_campaign_table()`, and `print_security_report()` - the actionable "which attacks got through and how to fix" feedback.
 - `advice.py` - per-attack remediation knowledge base backing the security report.
 - `stats.py` - `wilson_ci()`: Wilson score CI for honest error bounds at small n.
+- Results carry cost: `EpisodeResult` has prompt/completion tokens, `model_calls`, `served_model`, `defense_calls`/`defense_tokens`; `CampaignResult` adds `attacker_tokens`. `run_sweep(max_tokens=...)` enforces `limits.max_tokens_per_run` between cells.
 
 **Adapters** (`tripwire/adapters/`): `raw_loop.py` (minimal ReAct baseline), `langgraph_adapter.py` (single-agent LangGraph), `multi_agent_adapter.py` (LangGraph relay: agent A summarizes the inbox for agent B), `crewai_adapter.py` (CrewAI role/goal crew; optional `[crewai]` extra, imported lazily, records its trace at the tool boundary, honors `spec.max_turns`). Provider message shapes are normalized in `adapters/_common.py`; an implemented tool that is not on the offered menu (`spec.tools`) never runs. `loader.py` also loads a bring-your-own agent file (`--agent`).
 

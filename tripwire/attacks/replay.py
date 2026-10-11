@@ -150,16 +150,26 @@ def validate_replay(cases: Sequence[ReplayCase], seeds: Sequence[int]) -> None:
 def run_replay_sweep(
     adapters: Sequence[Adapter], models: Sequence[str], cases: Sequence[ReplayCase],
     seeds: Sequence[int], defenses: Sequence[Defense] | None = None, *,
-    max_turns: int = 5, concurrency: int = 1,
+    max_turns: int = 5, concurrency: int = 1, max_tokens: int | None = None,
 ) -> tuple[list[EpisodeResult], list[CampaignResult]]:
     """Evaluate frozen candidates with the ordinary runner, without an attacker LLM."""
     from tripwire.harness.runner import run_sweep
 
     validate_replay(cases, seeds)
     episodes = []
-    for case in cases:
+    # One sweep per frozen payload; limits.max_tokens_per_run applies to the
+    # whole replay, so each sweep gets what is left of the cap.
+    spent = 0
+    for index, case in enumerate(cases):
+        remaining = None if max_tokens is None else max_tokens - spent
+        if remaining is not None and remaining <= 0:
+            import sys
+            print(f"[replay] token cap reached: {len(cases) - index} of {len(cases)} payloads were NOT replayed.",
+                  file=sys.stderr)
+            break
         results, _ = run_sweep(adapters, models, [case], seeds, defenses=defenses,
                               scenarios=[case.target_scenario()], max_turns=max_turns,
-                              concurrency=concurrency)
+                              concurrency=concurrency, max_tokens=remaining)
         episodes.extend(results)
+        spent += sum(e.prompt_tokens + e.completion_tokens + e.defense_tokens for e in results)
     return episodes, []

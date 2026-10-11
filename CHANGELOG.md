@@ -5,6 +5,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added (measurement)
+
+- **Every result records what it cost.** Episodes carry `prompt_tokens`, `completion_tokens`, `model_calls`, the model id the provider actually served (`served_model`, e.g. the dated Azure deployment version), and the defense's own `defense_calls` and `defense_tokens` (the outbound guard's and the quarantined reader's, summed in a stack); campaigns carry the target's totals and `attacker_tokens`.
+  The ASR and campaign tables gain a `tokens` column (mean per scored run), so a defense's cost is reported, not guessed.
+- **`limits.max_tokens_per_run` is enforced.** The sweep stops scheduling cells once the running total reaches it, keeps everything that ran, and reports how many cells were not run; the overshoot is at most the cells in flight.
+  The loader no longer warns that it is unenforced.
+
 ### Added (defense track)
 
 - **Stacked defenses.** `defenses: [spotlighting+recipient_allowlist]` applies several rungs to one episode in the listed order; the first member that blocks decides, errors are summed so an outage inside a stack is still an error outcome, and the runner's model fallback reaches each member.
