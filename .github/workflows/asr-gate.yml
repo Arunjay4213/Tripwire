@@ -84,18 +84,22 @@ jobs:
       # ASR can only be 0% or 100%. That checks the wiring, not the agent.
       # A real gate should drop --smoke and use a config with more seeds
       # (10-20 per cell), then pass --min-n and --use-upper-bound below.
-      - name: Run smoke attack sweep
+      # tests/test_live.py runs `tripwire --config $CONFIG --smoke --preflight
+      # --strict` in-process and asserts the provider served the model, every
+      # episode scored, and the results file was written; the gate below reads
+      # that file. Skipped (not failed) when no key is present.
+      - name: Run smoke attack sweep (live test)
         if: steps.key.outputs.present == 'true'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_BASE_URL: ${{ secrets.GROQ_BASE_URL }}
-          CONFIG: ${{ github.event.inputs.config || 'tripwire/config/ci.example.yaml' }}
+          TRIPWIRE_LIVE: "1"
+          TRIPWIRE_LIVE_CONFIG: ${{ github.event.inputs.config || 'tripwire/config/ci.example.yaml' }}
+          TRIPWIRE_LIVE_OUTPUT: results/results.json
         run: |
-          python -m tripwire \
-            --config "$CONFIG" \
-            --smoke \
-            --output results/results.json
+          mkdir -p results
+          python -m pytest tests/test_live.py -q -s
 
       - name: Enforce ASR threshold
         if: steps.key.outputs.present == 'true'

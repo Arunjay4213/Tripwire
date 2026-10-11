@@ -2,7 +2,7 @@
 # Copy to threat_model.yaml and edit. Commit configs alongside results.
 
 models:
-  - llama-3.3-70b-versatile   # via Groq (OpenAI-compatible)
+  - openai/gpt-oss-20b     # via Groq (OpenAI-compatible); llama-3.3-70b-versatile was retired
 
 # Scenarios = the tasks the agent is attacked on (tripwire/scenarios.py). Each has
 # its own persona, task, tool, and AUTHORIZED recipient; a sweep runs every attack

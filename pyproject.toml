@@ -72,3 +72,9 @@ include = [
     "README.md",
     "LICENSE",
 ]
+
+
+[tool.pytest.ini_options]
+markers = [
+    "live: runs a real sweep against the configured provider (opt in with TRIPWIRE_LIVE=1)",
+]

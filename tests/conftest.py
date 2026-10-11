@@ -36,6 +36,13 @@ def _is_provider_var(name: str) -> bool:
     return name in _EXACT or name.endswith(_SUFFIXES)
 
 
+# The real provider configuration, captured before it is stripped, so the
+# opt-in live test (tests/test_live.py, TRIPWIRE_LIVE=1) can put it back.
+_REAL_PROVIDER_ENV: dict[str, str] = {
+    **{k: v for k, v in dotenv.dotenv_values(".env").items() if v is not None and _is_provider_var(k)},
+    **{n: os.environ[n] for n in os.environ if _is_provider_var(n)},
+}
+
 # python-dotenv honors this switch in load_dotenv itself (a second safety net
 # for any copy of the function bound before this file ran).
 os.environ["PYTHON_DOTENV_DISABLED"] = "1"
@@ -60,3 +67,17 @@ def _isolated_provider_env(monkeypatch: pytest.MonkeyPatch) -> None:
             continue
         if getattr(module, "load_dotenv", None) is not None:
             monkeypatch.setattr(module, "load_dotenv", _noop_load_dotenv)
+
+
+@pytest.fixture
+def live_provider_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Restore the developer's real provider keys for a live test. Skips
+    unless TRIPWIRE_LIVE=1, so the default suite stays offline. Returns
+    nothing on purpose: a fixture value is printed in assertion output."""
+    if os.environ.get("TRIPWIRE_LIVE") != "1":
+        pytest.skip("live provider test: set TRIPWIRE_LIVE=1 (and a provider key) to run")
+    if not any(k.endswith("_API_KEY") for k in _REAL_PROVIDER_ENV):
+        pytest.skip("live provider test: no provider API key in the environment or .env")
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)  # the offline dummy
+    for name, value in _REAL_PROVIDER_ENV.items():
+        monkeypatch.setenv(name, value)

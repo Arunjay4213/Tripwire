@@ -15,7 +15,7 @@
 # a non-zero, model-dependent ASR there and set the threshold accordingly.
 
 models:
-  - llama-3.3-70b-versatile
+  - openai/gpt-oss-20b     # via Groq (OpenAI-compatible); llama-3.3-70b-versatile was retired
 
 adapters:
   - raw_loop
