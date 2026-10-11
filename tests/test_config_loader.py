@@ -227,3 +227,29 @@ def test_max_concurrency_parsed_and_validated(tmp_path):
     import pytest
     with pytest.raises(ValueError, match="max_concurrency"):
         load_config(str(bad))
+
+
+# --- outbound_guard options -------------------------------------------------------
+
+def test_outbound_guard_fail_closed_is_the_default_and_configurable(tmp_path):
+    base = "models: [m]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\ndefenses: [outbound_guard]\n"
+    cfg = tmp_path / "default.yaml"
+    cfg.write_text(base)
+    assert load_config(str(cfg)).defenses[0].fail_closed is True
+
+    cfg.write_text(base + "outbound_guard:\n  fail_closed: false\n")
+    config = load_config(str(cfg))
+    assert config.guard_fail_closed is False
+    assert config.defenses[0].fail_closed is False
+
+
+@pytest.mark.parametrize("block, match", [
+    ("outbound_guard: yes\n", "must be a mapping"),
+    ("outbound_guard:\n  fail_closed: \"false\"\n", "must be true or false"),
+    ("outbound_guard:\n  fail_open: true\n", "Unknown outbound_guard key"),
+])
+def test_bad_outbound_guard_options_raise_clear_errors(tmp_path, block, match):
+    cfg = tmp_path / "bad.yaml"
+    cfg.write_text("models: [m]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\n" + block)
+    with pytest.raises(ValueError, match=match):
+        load_config(str(cfg))

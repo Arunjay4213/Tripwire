@@ -37,13 +37,14 @@ that is a detector error; the guard never sends a made-up model id.
 Errors. Every detector call increments `guard.calls`; every detector failure
 (provider error, no model, unparseable verdict, or an injected detector that
 raises) increments `guard.errors` and sets `guard.last_error`. With
-`fail_closed=False` (the default, kept for backward compatibility) an errored
-check allows the call; with `fail_closed=True` it blocks it with a message that
-says the guard errored, so the trace can tell "guard errored" apart from "guard
-allowed". Fail-closed is the realistic production setting: a guard that lets
-everything through when its checker is down is not a guard. Either way the
-counters make a guard that never worked visible in the output instead of
-looking identical to a guard that was evaded.
+`fail_closed=True` (the default) an errored check blocks the call with a
+message that says the guard errored, so the trace can tell "guard errored"
+apart from "guard blocked"; with `fail_closed=False` (config
+`outbound_guard: {fail_closed: false}`) it allows the call. Fail-closed is the
+realistic production setting: a guard that lets everything through when its
+checker is down is not a guard. Either way the runner reads the error count
+after each run and records a run whose guard errored (and did not leak) as an
+error outcome, never as "held" -- see runner.run_episode.
 """
 
 from __future__ import annotations
@@ -135,7 +136,7 @@ class OutboundGuard:
         detector: Detector | None = None,
         guarded_tools: tuple[str, ...] = _DEFAULT_GUARDED_TOOLS,
         model: str | None = None,
-        fail_closed: bool = False,
+        fail_closed: bool = True,
     ) -> None:
         # None -> default LLM detector (self._llm_detect). Nothing here touches
         # the network; the client is built on the first real check.

@@ -311,14 +311,14 @@ def test_outbound_guard_unparseable_verdict_is_an_error(guard_env, reply):
     guard_env(reply)
     guard = OutboundGuard(model="guard-m")
     ok, message = guard.check_tool_call("send_email", _LEAKY_ARGS)
-    assert (ok, message) == (True, "")  # default fail-open
-    assert guard.calls == 1 and guard.errors == 1
+    assert ok is False and "errored" in message  # default fail-closed
+    assert guard.calls == 1 and guard.errors == 1 and guard.blocks == 0
     assert "unparseable" in (guard.last_error or "")
 
 
-def test_outbound_guard_provider_error_fails_open_but_is_counted(guard_env):
+def test_outbound_guard_provider_error_fails_open_when_asked_but_is_counted(guard_env):
     guard_env(RuntimeError("model not found"))
-    guard = OutboundGuard(model="guard-m")
+    guard = OutboundGuard(model="guard-m", fail_closed=False)
     assert guard.check_tool_call("send_email", _LEAKY_ARGS) == (True, "")
     assert guard.check_tool_call("send_email", _LEAKY_ARGS) == (True, "")
     assert guard.calls == 2 and guard.errors == 2
@@ -348,11 +348,18 @@ def test_outbound_guard_injected_detector_exception_is_counted():
     def broken(_text):
         raise ValueError("boom")
 
-    open_guard = OutboundGuard(detector=broken)
+    open_guard = OutboundGuard(detector=broken, fail_closed=False)
     assert open_guard.check_tool_call("send_email", _LEAKY_ARGS) == (True, "")
     assert open_guard.errors == 1
-    closed_guard = OutboundGuard(detector=broken, fail_closed=True)
+    closed_guard = OutboundGuard(detector=broken)
     assert closed_guard.check_tool_call("send_email", _LEAKY_ARGS)[0] is False
+
+
+def test_resolve_defenses_builds_a_fail_closed_guard_unless_told_otherwise():
+    (default,) = resolve_defenses(["outbound_guard"], [])
+    (open_guard,) = resolve_defenses(["outbound_guard"], [], guard_fail_closed=False)
+    assert default.fail_closed is True
+    assert open_guard.fail_closed is False
 
 
 def test_outbound_guard_model_explicit_beats_guard_model_env(guard_env, monkeypatch):
@@ -398,11 +405,12 @@ def test_outbound_guard_no_model_makes_no_request(guard_env):
     """Nothing resolves -> detector error, never a made-up id like gpt-4o-mini."""
     made = guard_env("ALLOW")
     guard = OutboundGuard()
-    assert guard.check_tool_call("send_email", _LEAKY_ARGS) == (True, "")
+    assert guard.check_tool_call("send_email", _LEAKY_ARGS)[0] is False  # fails closed
     assert guard.errors == 1 and "no guard model" in (guard.last_error or "")
     assert all(c.requests == [] for c in made)
-    closed = OutboundGuard(fail_closed=True)
-    assert closed.check_tool_call("send_email", _LEAKY_ARGS)[0] is False
+    open_guard = OutboundGuard(fail_closed=False)
+    assert open_guard.check_tool_call("send_email", _LEAKY_ARGS) == (True, "")
+    assert all(c.requests == [] for c in made)
 
 
 def test_outbound_guard_client_is_lazy_and_cached(guard_env):
