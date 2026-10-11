@@ -648,3 +648,58 @@ def test_dead_reader_model_is_an_error_outcome_not_a_held_cell(tmp_path, monkeyp
     assert row["status"] == "error" and row["guard_errors"] >= 1, row
     assert "quarantined_reader" in row["error"], row
     assert gate.main(["--results", str(tmp_path / "results.json")]) == 1
+
+
+# --- stacks and the control ---------------------------------------------------------------
+
+def test_a_stack_applies_every_member_and_the_fallback_reaches_the_guard(
+    tmp_path, monkeypatch, capsys, provider,
+):
+    """spotlighting+outbound_guard with no GUARD_MODEL: the tool messages are
+    fenced (spotlighting ran), the guard was asked under the model under test
+    (the fallback reached the member), and the obedient agent's send was
+    blocked (the guard ran and decided)."""
+    from tripwire.defenses.outbound_guard import _DETECTOR_SYSTEM_PROMPT
+    from tripwire.defenses.spotlighting import OPEN_DELIMITER
+
+    monkeypatch.delenv("GUARD_MODEL", raising=False)
+    code, out, err, results = _run_cli(
+        tmp_path, monkeypatch, capsys, provider,
+        _config(adapters=["raw_loop"], defenses=["spotlighting+outbound_guard"]),
+    )
+    assert code == 0, err
+    (row,) = results
+    assert row["defense"] == "spotlighting+outbound_guard"
+    assert row["succeeded"] is False and row["status"] == "ok", row
+    guard_requests = [r for r in provider.requests if r["messages"][0]["content"] == _DETECTOR_SYSTEM_PROMPT]
+    assert [r["model"] for r in guard_requests] == ["fake/obedient"]
+    tool_messages = [m["content"] for r in provider.requests if r["messages"][0]["content"] != _DETECTOR_SYSTEM_PROMPT
+                     for m in r["messages"] if m["role"] == "tool"]
+    # Real tool output is fenced by spotlighting; the guard's block message is
+    # harness text and is never fenced (it is not untrusted content).
+    read_results = [m for m in tool_messages if "blocked by the outbound_guard" not in m]
+    blocks = [m for m in tool_messages if "blocked by the outbound_guard" in m]
+    assert read_results and all(m.startswith(OPEN_DELIMITER) for m in read_results)
+    assert blocks  # the second member ran and decided
+    assert "spotlighting+outbound_guard" in out  # one row, one name, in the table
+
+
+def test_no_attack_control_measures_a_defenses_own_utility_cost(tmp_path, monkeypatch, capsys, provider):
+    """Under the control, a resistant agent completes the task under every
+    defense that should cost nothing, and the tool message it reads carries
+    no payload at all."""
+    from tripwire.scenarios import SCENARIOS
+
+    defenses = ["null", "recipient_allowlist", "quarantined_reader", "spotlighting+recipient_allowlist"]
+    code, out, err, results = _run_cli(
+        tmp_path, monkeypatch, capsys, provider,
+        _config(model="fake/resistant", adapters=["raw_loop"], attacks=["no_attack"], defenses=defenses),
+    )
+    assert code == 0, err
+    assert {r["defense"] for r in results} == {"no_defense", *defenses[1:]}
+    for row in results:
+        assert row["attack"] == "no_attack" and row["status"] == "ok", row
+        assert row["task_completed"] is True and row["succeeded"] is False, row
+    decoys = {s.decoy_recipient for s in SCENARIOS.values()}
+    assert not any(d in json.dumps(provider.requests) for d in decoys)
+    assert "no_attack" in out

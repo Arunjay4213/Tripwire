@@ -45,6 +45,9 @@ attacks:
   - injecagent
   - important_instructions
   - tool_knowledge         # explicit tool arguments with a private-value placeholder
+  # the control: no injection at all. Its utility under each defense is the
+  # defense's own cost to the task, which the attacked rows cannot show.
+  - no_attack
   # hand-crafted attacks that actually move the numbers. Each targets a specific
   # defensive mechanism rather than spraying one trick.
   - fixed_injection        # "retired credential" social-engineering email
@@ -121,6 +124,11 @@ defenses:
   - secret_egress_scan
   - recipient_allowlist
   - quarantined_reader
+  # Stacks: several rungs on one episode, applied in the listed order, spelled
+  # with "+". The plan expects prompt-level rungs to add little to each other
+  # and different mechanisms to add more; these two cells measure that.
+  - prompt_hardening+spotlighting
+  - spotlighting+recipient_allowlist
 
 # Optional per-defense settings (defaults shown):
 # outbound_guard:

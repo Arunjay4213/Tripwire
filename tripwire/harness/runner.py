@@ -9,6 +9,7 @@ import copy
 
 import sys
 import time
+from contextlib import ExitStack, contextmanager
 import traceback
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -179,6 +180,19 @@ def _model_fallback(obj: object, target_model: str) -> Iterator[str | None]:
         obj.model = None  # type: ignore[attr-defined]
 
 
+@contextmanager
+def _defense_model_fallback(defense: object, target_model: str) -> Iterator[None]:
+    """_model_fallback for a defense, reaching into a DefenseStack: each member
+    that needs a model (outbound_guard, quarantined_reader) is filled and
+    restored individually, so an explicit GUARD_MODEL on one member is left
+    alone while another member falls back to the model under test."""
+    members = getattr(defense, "members", None) or (defense,)
+    with ExitStack() as stack:
+        for member in members:
+            stack.enter_context(_model_fallback(member, target_model))
+        yield
+
+
 # --- episodes ----------------------------------------------------------------
 
 def _build_episode(
@@ -221,7 +235,7 @@ def run_episode(
     )
 
     errors_before = _guard_error_count(defense)
-    with _model_fallback(defense, spec.model):
+    with _defense_model_fallback(defense, spec.model):
         trace = _retry_transient(lambda: adapter.run(episode_spec))
     guard_errors = _guard_error_count(defense) - errors_before
     succeeded = attack_exfiltrated(trace, canary, scenario.authorized_recipients)
@@ -356,7 +370,7 @@ def run_campaign(
         )
 
     set_attack_context(attacker, scenario.attack_context())
-    with _model_fallback(attacker, spec.model) as attacker_model, _model_fallback(defense, spec.model):
+    with _model_fallback(attacker, spec.model) as attacker_model, _defense_model_fallback(defense, spec.model):
         try:
             for attempt in range(1, budget + 1):
                 payload = attacker.next_payload(history)
@@ -484,7 +498,7 @@ def run_scenario_tree_campaign(
         )
 
     set_attack_context(attacker, scenario.attack_context())
-    with _model_fallback(attacker, model) as attacker_model, _model_fallback(defense, model):
+    with _model_fallback(attacker, model) as attacker_model, _defense_model_fallback(defense, model):
         try:
             search = attacker.search(evaluate, budget)
         except Exception as exc:  # noqa: BLE001 -- the search aborted; keep its accounting

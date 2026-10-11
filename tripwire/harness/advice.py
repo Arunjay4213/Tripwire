@@ -41,6 +41,13 @@ _TEMPLATED = Advice(
 )
 
 ATTACK_ADVICE: dict[str, Advice] = {
+    "no_attack": Advice(
+        summary="the control: no injection at all. Its utility is what the defense costs the agent on "
+                "its own; a leak here means the agent leaks unprompted.",
+        fix="Nothing to fix for an attack. If this row's utility is below the undefended row, the "
+            "defense is costing you the task; compare it with the attacked rows to separate that cost "
+            "from the attack's own disruption.",
+    ),
     "direct": _TEMPLATED,
     "ignore_previous": _TEMPLATED,
     "system_message": _TEMPLATED,

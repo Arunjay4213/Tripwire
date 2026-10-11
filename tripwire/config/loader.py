@@ -30,6 +30,7 @@ from tripwire.attacks.fixed_injection import (
     PublicIdentifier,
     RelayActionItem,
 )
+from tripwire.attacks.control import NoAttack
 from tripwire.attacks.iterative import IterativeAttacker
 from tripwire.attacks.tree_attacker import TreeAttacker
 from tripwire.defenses.base import Defense, NoDefense
@@ -39,6 +40,7 @@ from tripwire.defenses.quarantined_reader import QuarantinedReader
 from tripwire.defenses.recipient_allowlist import RecipientAllowlist
 from tripwire.defenses.secret_egress_scan import SecretEgressScan
 from tripwire.defenses.spotlighting import Datamarking, Spotlighting
+from tripwire.defenses.stack import SEPARATOR, DefenseStack
 from tripwire.defenses.taint_tracking import TaintTracking
 from tripwire.defenses.tool_filter import ToolFilter
 from tripwire.scenarios import INJECTION_SLOTS, SCENARIOS, Scenario
@@ -77,6 +79,7 @@ _ATTACK_REGISTRY: dict[str, type] = {
     "tool_knowledge": ToolKnowledgeAttack,
     "iterative": IterativeAttacker,
     "tree_attacker": TreeAttacker,
+    "no_attack": NoAttack,
 }
 
 
@@ -407,7 +410,9 @@ def load_config(path: str) -> TripwireConfig:
             raise _unknown_name_error("knowledge mode", mode, ("known", "unknown"))
     scenarios = [s.with_attack_options(slot, mode == "known")
                  for s in scenarios for slot in slots for mode in modes]
-    warnings = _allowed_tools_warnings(allowed_tools, defense_names, scenarios)
+    # A stack's parts count: tool_filter inside 'tool_filter+x' is still tool_filter.
+    flat_defense_names = [part for n in defense_names for part in (n.split(SEPARATOR) if n else [None])]
+    warnings = _allowed_tools_warnings(allowed_tools, flat_defense_names, scenarios)
     for key in ("outbound_guard", "recipient_allowlist"):
         if raw.get(key) and key not in defense_names:
             warnings.append(f"{key} options are set but {key} is not in `defenses`, so they have no effect.")
@@ -508,11 +513,22 @@ def resolve_defenses(
         raise ValueError(
             f"allowed_tools must be a list of tool names, got the string {allowed_tools!r}"
         )
-    defenses: list[Defense] = []
-    for name in names:
+    def resolve_one(name: str | None) -> Defense:
         if name is None:
-            defenses.append(NoDefense())
-        elif name == "tool_filter":
+            return NoDefense()
+        if isinstance(name, str) and SEPARATOR in name:
+            # "a+b": a stack, each part an ordinary defense, applied in order.
+            parts = [p.strip() for p in name.split(SEPARATOR)]
+            if any(p in ("", "null", "none") for p in parts):
+                raise ValueError(
+                    f"defense stack {name!r}: every part must be a defense name; "
+                    "the no-defense baseline cannot be stacked"
+                )
+            return DefenseStack([resolve_one(p) for p in parts])
+        return resolve_plain(name)
+
+    def resolve_plain(name: str) -> Defense:
+        if name == "tool_filter":
             allowed = frozenset(allowed_tools)
             if scenarios is not None:
                 allowed |= {s.read_tool for s in scenarios}
@@ -522,18 +538,18 @@ def resolve_defenses(
                 )
             # ToolFilter only does `name in self.allowed_tools`, so a frozenset
             # works unchanged and cannot degrade to a substring match.
-            defenses.append(ToolFilter(allowed))  # type: ignore[arg-type]
-        elif name == "outbound_guard":
-            defenses.append(OutboundGuard(
+            return ToolFilter(allowed)  # type: ignore[arg-type]
+        if name == "outbound_guard":
+            return OutboundGuard(
                 fail_closed=guard_fail_closed, precheck=guard_precheck,
                 recipient_context=guard_recipient_context,
-            ))
-        elif name == "recipient_allowlist":
-            defenses.append(RecipientAllowlist(allowlist, from_user_message=allowlist_from_user_message))
-        elif name in _DEFENSE_REGISTRY:
-            defenses.append(_DEFENSE_REGISTRY[name]())
-        else:
-            raise _unknown_name_error(
-                "defense", name, ["tool_filter", *_DEFENSE_REGISTRY, "null (no defense)"]
             )
-    return defenses
+        if name == "recipient_allowlist":
+            return RecipientAllowlist(allowlist, from_user_message=allowlist_from_user_message)
+        if name in _DEFENSE_REGISTRY:
+            return _DEFENSE_REGISTRY[name]()
+        raise _unknown_name_error(
+            "defense", name, ["tool_filter", *_DEFENSE_REGISTRY, "null (no defense)", "a+b (a stack)"]
+        )
+
+    return [resolve_one(name) for name in names]
