@@ -22,7 +22,7 @@ Confidence scale: very high, high, medium, low.
 | AttackContext through `render(canary, ctx)` | Done | High | Large on helpdesk, calendar, expense. None on invoice. | Payloads are invoice-specific and get pasted into a VPN ticket or a meeting request. The mismatch is what an aligned model notices. Enabler for everything that follows. |
 | Fix the objective: retarget `public_identifier` and `forged_boundary`, rewrite the PAIR prompt | Done | High that numbers change, medium on magnitude | Two attacks go from structural 0% to something measurable. PAIR improves moderately. | PAIR optimizes a grade the judge does not count. Fixing a wrong target reliably helps. The attacker model's ceiling is unknown. |
 | TAP scoring and search fixes | Done | Medium-high | Moderate. Bounded by the small evaluation budget. | The scorer ranks a benign run above a defense-blocked attack, so it prunes the best branch. Dedup and memory save wasted evaluations rather than find new wins. |
-| Lift the verbatim-only constraint | Not done. The attacker prompts still ask for the id verbatim. | High against outbound_guard, near zero elsewhere | Guard ASR could rise substantially. | Encoding is the canonical classifier bypass. The judge now detects normalized, base64, hex, reversed and split leaks, so the constraint is no longer needed. Prompt-level defenses do not care how the id is written. |
+| Lift the verbatim-only constraint | Done (2026-10-11). TAP already permitted encoding; PAIR now does too, with a guard-evasion seed and a guard-block diagnosis. | High against outbound_guard, near zero elsewhere | Guard ASR could rise substantially. | Encoding is the canonical classifier bypass. The judge now detects normalized, base64, hex, reversed and split leaks, so the constraint is no longer needed. Prompt-level defenses do not care how the id is written. |
 | Injection slots: position, bounce message, tool description | Not done | Medium | Uncertain. Plausibly large for the bounce message. | Injection while the agent is mid-action is well documented as stronger. Position effects are real but smaller. Highest implementation cost on this list. |
 | Relay-aware attack | Done (`relay_action_item`) | Medium | multi_agent rows only. | The summarizer is told to list recipients and action items. That instruction is targetable, but the id must survive two hops. |
 | Guard-directed attack | Done (`guard_injection`) | Medium-high against the guard only | Guard ASR up. | The guard reads the attacker-influenced body. Once the guard fences its input, this attack weakens. |
@@ -51,7 +51,7 @@ Attack side first.
 1. AttackContext contract and scenario fields (enabler). Done.
 2. Templated hand-crafted attacks, retargeted `public_identifier` and `forged_boundary`, guard-directed and relay-aware classes. Done.
 3. PAIR rewrite around the destination-aware objective with the redacted observation feedback. Done.
-4. TAP scorer, critic as tiebreaker, dedup, technique memory, partial-JSON salvage, keep `best_payload`, lift the verbatim constraint. Done except the verbatim constraint.
+4. TAP scorer, critic as tiebreaker, dedup, technique memory, partial-JSON salvage, keep `best_payload`, lift the verbatim constraint. Done.
 5. Fresh baseline sweep, then measure. Not done. The only results newer than the attack rewrite are three errored episodes from a retired Groq model.
 6. Injection slots and `tool_knowledge` port as a second wave. Not started.
 
@@ -80,7 +80,7 @@ Nothing here changes an attack or a defense; it makes the other two tracks' resu
 Owns attack strength and realism.
 All four items are independent of track 3 and of each other.
 
-1. Lift the verbatim-only constraint in the PAIR and TAP prompts; the judge already detects encoded and split leaks.
+1. Lift the verbatim-only constraint in the PAIR and TAP prompts; the judge already detects encoded and split leaks. Done 2026-10-11.
 2. Remove oracle knowledge of the secret label from every attack.
 3. Port AgentDojo's `tool_knowledge` attack.
 4. Injection slots: position within the tool result, a bounce message mid-action, and the tool description. Highest cost, last.

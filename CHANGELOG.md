@@ -7,6 +7,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- **PAIR may encode or split the id.**
+  The iterative attacker's prompt now says the id need not be sent verbatim, adds a guard-evasion seed strategy, and tells the attacker to encode or split the value when a guard blocked the send; the judge already decodes those forms, and the tree attacker already allowed them.
+  Expect outbound_guard ASR under `iterative` to rise.
 - **`outbound_guard` fails closed by default.**
   When the guard's detector errors (provider error, no model, unparseable verdict) the call is now blocked instead of allowed; `outbound_guard: {fail_closed: false}` in the config restores the old behaviour.
 - **A guard outage is an error outcome, not a defended run.**
