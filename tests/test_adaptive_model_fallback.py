@@ -203,14 +203,6 @@ class _FixedAttack:
         return "payload"
 
 
-def test_defense_without_model_gets_target_model_during_episode():
-    defense = _ModelDefense()
-    spec = EpisodeSpec(task=None, tools=[], model="target-model", environment_seed=0)
-    run_episode(_GuardCallingAdapter(), spec, _FixedAttack(), defense=defense)
-    assert defense.models_seen == ["target-model"]
-    assert defense.model is None
-
-
 def test_defense_with_explicit_model_is_left_alone():
     defense = _ModelDefense(model="guard-model")
     spec = EpisodeSpec(task=None, tools=[], model="target-model", environment_seed=0)

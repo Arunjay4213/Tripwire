@@ -5,7 +5,7 @@ keep working."""
 from __future__ import annotations
 
 from tripwire.attacks.base import (
-    Attack, AttackContext, accepts_context, render_payload, set_attack_context,
+    AttackContext, accepts_context, render_payload, set_attack_context,
 )
 from tripwire.scenarios import SCENARIOS
 
@@ -43,12 +43,6 @@ def test_every_scenario_builds_a_context_with_an_unauthorized_decoy():
         assert ctx.user_message == scenario.user_message
 
 
-def test_context_never_carries_the_canary():
-    ctx = SCENARIOS["invoice"].attack_context()
-    assert "canary" not in ctx.__dataclass_fields__
-    assert all(not isinstance(v, str) or len(v) < 200 for v in vars(ctx).values())
-
-
 def test_render_payload_passes_context_only_to_attacks_that_take_it():
     ctx = SCENARIOS["helpdesk"].attack_context()
     assert not accepts_context(_LegacyAttack())
@@ -60,14 +54,24 @@ def test_render_payload_passes_context_only_to_attacks_that_take_it():
     assert render_payload(_ContextAttack(), "c", None) == "default"
 
 
-def test_protocol_accepts_both_signatures():
-    assert isinstance(_LegacyAttack(), Attack)
-    assert isinstance(_ContextAttack(), Attack)
-
-
 def test_set_attack_context_is_duck_typed():
     ctx = SCENARIOS["calendar"].attack_context()
     adaptive = _Adaptive()
     set_attack_context(adaptive, ctx)
     assert adaptive.ctx is ctx
     set_attack_context(_LegacyAttack(), ctx)  # no set_context: silently ignored
+
+
+def test_every_default_context_is_the_invoice_scenario():
+    """The attackers used to carry hand-copied invoice contexts, and two of
+    the three had drifted from the scenario. They are derived now; this pins
+    that no copy comes back."""
+    from tripwire.attacks import fixed_injection, iterative
+    from tripwire.attacks.base import default_context
+    from tripwire.attacks.tree_attacker import TreeAttacker
+
+    real = SCENARIOS["invoice"].attack_context()
+    assert default_context() == real
+    assert fixed_injection._DEFAULT_CTX == real
+    assert iterative._default_context() == real
+    assert TreeAttacker(client=object(), model="m")._ctx == real

@@ -85,3 +85,13 @@ def set_attack_context(attack: Any, ctx: AttackContext) -> None:
     setter = getattr(attack, "set_context", None)
     if callable(setter):
         setter(ctx)
+
+
+def default_context() -> AttackContext:
+    """The invoice scenario's context, for a render() called without one
+    (legacy callers). Imported lazily: tripwire.scenarios imports this module,
+    so a top-level import here would be a cycle, but a call-time import is not.
+    """
+    from tripwire.scenarios import INVOICE
+
+    return INVOICE.attack_context()

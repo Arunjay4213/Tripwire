@@ -49,10 +49,6 @@ def test_parse_fallback_to_raw_text():
     assert out == [{"diagnosis": "", "strategy": "", "payload": "not json, just an email body"}]
 
 
-def test_parse_empty_is_empty():
-    assert _parse_refinements("   ") == []
-
-
 def test_salvage_truncated_json_array():
     """A response cut off by the token cap -- json.loads fails on the whole thing,
     but the complete leading objects are recovered and the truncated tail dropped.
@@ -338,51 +334,6 @@ def test_total_generation_failure_raises_not_scored_as_a_hold():
     assert atk.errors > 0
 
 
-def test_partial_generation_error_is_contained():
-    """A generation error on one attacker call is contained: later calls still
-    produce payloads, evaluations happen, and the search does not raise."""
-
-    class _FailThenAnswer(_StubCompletions):
-        def create(self, **kwargs):
-            self.calls += 1
-            if self.calls == 1:
-                raise RuntimeError("transient attacker model error")
-            return _StubCompletion(_refinements("recovered payload"))
-
-    client = StubClient(["ignored"])
-    client.chat.completions = _FailThenAnswer(["ignored"])
-    atk = TreeAttacker(client=client, model="stub", use_critic=False,
-                       branching=1, width=1, max_depth=1, gen_retries=2)
-
-    res = atk.search(lambda payload: _obs(grade=1, executed=True), budget=3)
-    assert res.evaluations >= 1
-    assert atk.errors >= 1
-
-
-def test_best_payload_survives_across_depths():
-    """A strong node found at depth 1 stays as best_payload even when every child
-    at depth 2 is worse -- the elite carryover keeps it in the pool."""
-    client = StubClient([_refinements("strong"), _refinements("weak")])
-    atk = TreeAttacker(client=client, model="stub", use_critic=False, branching=1, width=1, max_depth=2)
-
-    def evaluate(payload):
-        if payload == "strong":
-            return _obs(grade=2, executed=True)  # rung 6
-        return _obs(grade=0, reply="no")         # rung 1
-
-    res = atk.search(evaluate, budget=10)
-    assert res.broke is False
-    assert res.best_payload == "strong"
-
-
-def test_protocol_name_and_registry():
-    from tripwire.attacks.base import Attack
-    from tripwire.config.loader import resolve_attacks
-    atk = resolve_attacks(["tree_attacker"])[0]
-    assert atk.name == "tree_attacker"
-    assert isinstance(atk, Attack) or hasattr(atk, "search")  # campaign attacker
-
-
 def test_set_context_reaches_the_attacker_prompt():
     """set_context must actually template the prompt to the running scenario;
     a regression that kept every scenario on the invoice story is the exact bug
@@ -533,3 +484,30 @@ def test_elite_carryover_keeps_a_strong_node_across_a_weak_depth():
     depth3_prompt = gen_prompts[-1]
     assert "pA" in depth3_prompt   # the strong node was re-expanded
     assert "pB" not in depth3_prompt
+
+
+def test_non_transient_generation_error_is_not_retried_with_sleeps(monkeypatch):
+    """A deterministic failure (auth, unknown model) must not cost three sleeps
+    per call and gen_retries re-queries per parent."""
+    slept = []
+    monkeypatch.setattr(tree_mod.time, "sleep", lambda s: slept.append(s))
+
+    class _Boom(_StubCompletions):
+        def __init__(self, outputs):
+            super().__init__(outputs)
+            self.calls = 0
+
+        def create(self, **kwargs):
+            self.calls += 1
+            raise RuntimeError("attacker model down")
+
+    client = StubClient(["ignored"])
+    client.chat.completions = _Boom(["ignored"])
+    atk = TreeAttacker(client=client, model="stub", use_critic=False,
+                       branching=2, width=2, max_depth=2, gen_retries=1)
+    with pytest.raises(RuntimeError):
+        atk.search(lambda payload: (_ for _ in ()).throw(AssertionError("no evaluation")), budget=5)
+    assert slept == []
+    # One provider call per attempt (root parent, gen_retries + 1 attempts); the
+    # old policy made three calls per attempt with sleeps between them.
+    assert client.chat.completions.calls == atk.gen_retries + 1

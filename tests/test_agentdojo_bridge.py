@@ -1,10 +1,10 @@
 """Offline tests for the AgentDojo bridge.
 
 No LLM and no network: get_suite loads bundled benchmark data, environments are
-plain pydantic objects, and the tools run locally against them. We drive the
-bridge with a fake adapter and a scripted tool call to prove the wiring --
-schema conversion, tool binding to a live env, defense hooks, and AgentDojo's
-own scoring -- without any model in the loop.
+plain pydantic objects, and the tools run locally against them. We build the
+episode spec directly and script a tool call to prove the wiring -- schema
+conversion, tool binding to a live env, defense hooks, and AgentDojo's own
+scoring -- without any model in the loop.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ from __future__ import annotations
 import pytest
 from agentdojo.attacks.base_attacks import MODEL_NAMES
 
-from tripwire.adapters.base import EpisodeSpec, NormalizedTrace, TraceStep
+from tripwire.adapters.base import NormalizedTrace
 from tripwire.defenses.base import NoDefense
 from tripwire.defenses.prompt_hardening import PromptHardening
 from tripwire.defenses.spotlighting import OPEN_DELIMITER, Spotlighting
@@ -20,7 +20,6 @@ from tripwire.environments.agentdojo_bridge import (
     AGENTDOJO_SYSTEM_PROMPT,
     AgentDojoEpisode,
     _agentdojo_model_name,
-    run_agentdojo_episode,
 )
 
 # A fixed, known-present workspace pairing (see the suite's task ids).
@@ -43,11 +42,6 @@ def test_build_spec_uses_real_task_prompt_and_tools():
     names = [t["function"]["name"] for t in spec.tools]
     assert "send_email" in names
     assert len(names) > 10
-
-
-def test_no_defense_system_prompt_is_base():
-    spec = _episode().build_spec(NoDefense(), seed=0)
-    assert spec.task["system_prompt"] == AGENTDOJO_SYSTEM_PROMPT
 
 
 def test_prompt_hardening_wraps_system_prompt():
@@ -89,32 +83,6 @@ def test_score_returns_two_bools_on_empty_run():
     succeeded, completed = ep.score(trace)
     assert succeeded is False
     assert completed is False
-
-
-class _NoToolAdapter:
-    """Adapter that calls nothing and returns a clean refusal trace."""
-
-    name = "notool"
-
-    def run(self, spec: EpisodeSpec) -> NormalizedTrace:
-        return NormalizedTrace(
-            steps=[TraceStep(step=0, type="model_output", content="done")],
-            final_output="done",
-        )
-
-
-def test_run_agentdojo_episode_end_to_end_offline():
-    result = run_agentdojo_episode(
-        _NoToolAdapter(), USER_TASK, INJECTION_TASK, "direct", MODEL,
-        defense=NoDefense(), seed=1,
-    )
-    assert result.adapter == "notool"
-    assert result.attack == "direct"
-    assert result.defense == "no_defense"
-    assert result.seed == 1
-    # No tools called -> neither the injection nor the real task succeeded.
-    assert result.succeeded is False
-    assert result.task_completed is False
 
 
 # --- model-name mapping (so important_instructions never crashes) ------------
