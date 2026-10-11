@@ -47,15 +47,15 @@ Where Tripwire drives those, the environment model and the utility check come fr
 
 ## Detect-only versus prevent
 
-The defenses split into three enforcement styles, and they make different claims.
+The defenses split into four enforcement styles, and they make different claims.
 
 - **Deterministic prevent.** `recipient_allowlist`, `secret_egress_scan`, `taint_tracking` and `tool_filter` refuse a call before it executes, with no model in the decision, so a blocked attempt is recorded as `tool_blocked` and is never scored as a leak.
   No payload wording can change their verdict.
 - **Model-based prevent.** `outbound_guard` also blocks before execution, but a second model decides, so a payload can still talk it past (`guard_injection` is written to).
-- **Instruction-level.** `prompt_hardening`, `sandwich`, `spotlighting` and `datamarking` only change what the model is told; they do not enforce anything.
 - **Content isolation.** `quarantined_reader` never shows the agent the untrusted text: a quarantined extractor returns only the typed values the task declares, each validated by kind, and the agent sees that record.
   It prevents by construction for anything that is not a declared field, but the extractor itself reads the attack, so a value it was talked into poisoning is caught only by the kind check; `reader.dropped` counts those.
   Its utility depends on the extractor keeping the values the task needs, which the four built-in scenarios pin offline.
+- **Instruction-level.** `prompt_hardening`, `sandwich`, `spotlighting` and `datamarking` only change what the model is told; they do not enforce anything.
   Their effect is entirely the model choosing to obey, which is exactly what a good injection is written to override.
   Treat their ASR reduction as a shift in the odds, not a guarantee.
 

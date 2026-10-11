@@ -32,7 +32,7 @@ Confidence scale: very high, high, medium, low.
 
 ## Defense side
 
-Status as of 2026-10-11, branch `soham/defense-track`.
+Status as of 2026-10-11, on `main`: items 1 to 6 of track 3 merged in PR #5, the quarantined reader after it.
 "Offline-verified" means unit tests plus `tests/test_e2e.py`, which runs the real CLI, adapters and SDK against `tests/fake_provider.py`: an agent that obeys every injection (`fake/obedient`) and one that only does its task (`fake/resistant`).
 Nothing in this table has been measured on a real model yet.
 
@@ -122,6 +122,6 @@ Item 1 is the enabler and goes first; items 2 and 3 are the headline and come ne
 6. Taint tracking. Done.
 7. Quarantined reader. Done 2026-10-11.
 
-Status 2026-10-11: items 1 to 6 are on branch `soham/defense-track`, each covered offline (unit tests plus `tests/test_e2e.py` through the fake provider).
+Status 2026-10-11: all seven items are on `main` (1 to 6 merged in PR #5, the quarantined reader after it), each covered offline (unit tests plus `tests/test_e2e.py` through the fake provider).
 None is measured on a real model yet; every one needs its track-1 comparison before its number is quoted.
 Two of them change existing rows rather than adding new ones, so the baseline must be run on the commit before them: `prompt_hardening`/`spotlighting` now anchor the recipient, and `multi_agent` now defends its sending agent.

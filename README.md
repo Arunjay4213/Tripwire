@@ -71,8 +71,8 @@ Your agent just needs to expose `run(spec) -> NormalizedTrace` (or an `adapter` 
 ## What you get
 
 - **Bring your own agent.** One contract - `EpisodeSpec` in, `NormalizedTrace` out - and any agent, any framework, gets the same evaluation.
-- **13 attacks.** Templated baselines (ported from AgentDojo), five hand-crafted attacks that actually break real defenses (including `mundane_redirect`, the first to beat the input-side ones), and two adaptive attackers (PAIR-style and TAP-style tree search with an LLM critic). → [docs/attacks.md](docs/attacks.md)
-- **A defense ladder.** Instruction-level rungs (`prompt_hardening`, `sandwich`, `spotlighting`, `datamarking`), a second-model `outbound_guard`, and deterministic egress checks (`taint_tracking`, `secret_egress_scan`, `recipient_allowlist`) that no injected text can talk past - each measured for security *and* utility, so you see the trade-off, not a single point. Every defense reaches every agent, including the sender in a multi-agent relay.
+- **16 attacks.** Templated baselines (ported from AgentDojo, including `tool_knowledge`), hand-crafted attacks that actually break real defenses (including `mundane_redirect`, the first to beat the input-side ones), and two adaptive attackers (PAIR-style and TAP-style tree search with an LLM critic). Optional profiles move the injection (prepend, middle, a bounced-delivery notice, the tool description) and hide the secret's label from the attacker; successful adaptive payloads can be frozen and replayed on held-out seeds. → [docs/attacks.md](docs/attacks.md)
+- **A defense ladder.** Instruction-level rungs (`prompt_hardening`, `sandwich`, `spotlighting`, `datamarking`), a second-model `outbound_guard`, a `quarantined_reader` that shows the agent only typed fields extracted from untrusted content, and deterministic egress checks (`taint_tracking`, `secret_egress_scan`, `recipient_allowlist`) that no injected text can talk past - each measured for security *and* utility, so you see the trade-off, not a single point. Every defense reaches every agent, including the sender in a multi-agent relay.
 - **Realistic scenarios.** `invoice`, `helpdesk`, `calendar`, `expense` - each a different task with its own authorized recipient. Your agent is tested across all of them.
 - **Actionable feedback.** Every run ends with a per-attack report: what leaked, why, and the concrete fix.
 - **Deterministic, honest scoring.** Pure-Python judge (no LLM), fixed seeds, Wilson confidence intervals instead of bare percentages. Runs in CI.
@@ -114,7 +114,7 @@ python scripts/ci/check_asr_threshold.py --results results.json --threshold 0.5
 ```bash
 git clone https://github.com/Arunjay4213/Tripwire && cd Tripwire
 pip install -e ".[dev]"     # or: uv pip install -e ".[dev]"
-pytest                      # ~690 offline tests, no network
+pytest                      # ~800 offline tests, no network
 ```
 
 ## License
