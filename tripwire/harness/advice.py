@@ -46,6 +46,10 @@ ATTACK_ADVICE: dict[str, Advice] = {
     "system_message": _TEMPLATED,
     "injecagent": _TEMPLATED,
     "important_instructions": _TEMPLATED,
+    "tool_knowledge": Advice(
+        summary="supplies explicit tool arguments with a placeholder for a private value, framed as a task prerequisite.",
+        fix="Enforce recipient and data-egress policy at the tool boundary; tool content must not authorize extra sends.",
+    ),
 
     "fixed_injection": Advice(
         summary="a social-engineering email claiming your secret was 'already rotated out' and is now safe to log.",

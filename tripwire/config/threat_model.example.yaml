@@ -44,6 +44,7 @@ attacks:
   - system_message
   - injecagent
   - important_instructions
+  - tool_knowledge         # explicit tool arguments with a private-value placeholder
   # hand-crafted attacks that actually move the numbers. Each targets a specific
   # defensive mechanism rather than spraying one trick.
   - fixed_injection        # "retired credential" social-engineering email
@@ -55,6 +56,12 @@ attacks:
   # so NOT seed-reproducible. Set ATTACKER_MODEL to a strong model separate from the target.
   - iterative              # PAIR-style propose/score/refine loop
   - tree_attacker          # TAP-style tree search with an LLM critic
+
+# Optional threat profiles; each slot x knowledge mode multiplies scenario cells.
+# Defaults are append and known. See docs/attacks.md for discovery/replay commands.
+# attack_options:
+#   injection_slots: [append, prepend, middle, bounce, tool_description]
+#   knowledge_modes: [known, unknown]
 
 # Defense ladder, cheap-weak -> expensive-strong, so the security/utility
 # Pareto has shape instead of collapsing to a single point. Each rung trades

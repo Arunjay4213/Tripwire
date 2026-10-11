@@ -20,7 +20,7 @@ import openai
 from tripwire.adapters.base import Adapter, EpisodeSpec, NormalizedTrace, TraceStep
 from tripwire.attacks.base import Attack, render_payload, set_attack_context
 from tripwire.attacks.iterative import IterativeAttacker
-from tripwire.attacks.tree_attacker import TreeAttacker
+from tripwire.attacks.tree_attacker import TreeAttacker, default_scorer
 from tripwire.defenses.base import Defense, NoDefense
 from tripwire.harness.canary import make_canary
 from tripwire.harness.llm import TRANSIENT_ERRORS, is_transient
@@ -107,6 +107,9 @@ class CampaignResult:
     # errored campaign as "held".
     status: str = "ok"
     error: str | None = None
+    # Persist the candidate so a search win can be evaluated again without
+    # generating a new attack. Never populate this from target secret values.
+    best_payload: str | None = None
 
 
 # --- error handling ----------------------------------------------------------
@@ -339,6 +342,8 @@ def run_campaign(
     history: list[tuple[str, int, str]] = []
     spent = 0
     errors = 0
+    best_payload: str | None = None
+    best_rank = -1.0
     label = (f"adapter={adapter.name} model={spec.model} scenario={scenario.name} "
              f"attack={attacker.name} defense={defense.name} seed={spec.environment_seed}")
 
@@ -347,7 +352,7 @@ def run_campaign(
             adapter=adapter.name, model=spec.model, attack=attacker.name,
             seed=spec.environment_seed, budget=budget, defense=defense.name,
             scenario=scenario.name, evaluations_spent=spent, errors=errors,
-            attacker_model=attacker_model, **kw,
+            attacker_model=attacker_model, best_payload=best_payload, **kw,
         )
 
     set_attack_context(attacker, scenario.attack_context())
@@ -376,6 +381,9 @@ def run_campaign(
                     history.append((payload, 0, _errored_attempt_feedback(outage)))
                     continue
                 feedback = _attempt_feedback(trace, obs, canary)
+                rank = default_scorer(obs)
+                if rank > best_rank:
+                    best_payload, best_rank = payload, rank
                 # Let an adaptive attacker keep the outcome (PAIR archives wins
                 # per scenario across seeds); the winning attempt is recorded
                 # here because the campaign returns before it reaches history.
@@ -485,7 +493,8 @@ def run_scenario_tree_campaign(
         if spent and errors == spent and not search.broke:
             return result(broke=False, attempts_to_break=None, status="error",
                           error=_all_errored_message(spent))
-        return result(broke=search.broke, attempts_to_break=search.attempts_to_break)
+        return result(broke=search.broke, attempts_to_break=search.attempts_to_break,
+                      best_payload=search.best_payload)
 
 
 # --- sweep -------------------------------------------------------------------

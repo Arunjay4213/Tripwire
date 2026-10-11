@@ -4,7 +4,7 @@ Written 2026-09-25; status column updated 2026-10-11.
 This follows the audit in `audit-2026-09-25.md`.
 Part 1 of that audit (measurement bugs) is fixed and committed.
 This document records the remaining attack-side and defense-side changes, with a confidence and expected-effect estimate for each.
-The Status column says what is on `main` as of 2026-10-11.
+The Status column includes attack-side implementation as of 2026-10-11. Implementation status is separate from measured effectiveness.
 
 None of the estimates below have been measured.
 The Part 1 fixes changed the baseline: multi_agent now sees the payload in every scenario, the outbound guard now runs a real model, and errored episodes are no longer dropped.
@@ -22,13 +22,13 @@ Confidence scale: very high, high, medium, low.
 | AttackContext through `render(canary, ctx)` | Done | High | Large on helpdesk, calendar, expense. None on invoice. | Payloads are invoice-specific and get pasted into a VPN ticket or a meeting request. The mismatch is what an aligned model notices. Enabler for everything that follows. |
 | Fix the objective: retarget `public_identifier` and `forged_boundary`, rewrite the PAIR prompt | Done | High that numbers change, medium on magnitude | Two attacks go from structural 0% to something measurable. PAIR improves moderately. | PAIR optimizes a grade the judge does not count. Fixing a wrong target reliably helps. The attacker model's ceiling is unknown. |
 | TAP scoring and search fixes | Done | Medium-high | Moderate. Bounded by the small evaluation budget. | The scorer ranks a benign run above a defense-blocked attack, so it prunes the best branch. Dedup and memory save wasted evaluations rather than find new wins. |
-| Lift the verbatim-only constraint | Done (2026-10-11). TAP already permitted encoding; PAIR now does too, with a guard-evasion seed and a guard-block diagnosis. | High against outbound_guard, near zero elsewhere | Guard ASR could rise substantially. | Encoding is the canonical classifier bypass. The judge now detects normalized, base64, hex, reversed and split leaks, so the constraint is no longer needed. Prompt-level defenses do not care how the id is written. |
-| Injection slots: position, bounce message, tool description | Not done | Medium | Uncertain. Plausibly large for the bounce message. | Injection while the agent is mid-action is well documented as stronger. Position effects are real but smaller. Highest implementation cost on this list. |
+| Lift the verbatim-only constraint | Implemented: PAIR now explicitly allows supported encodings; TAP already allowed them. Effect unmeasured. | High against outbound_guard, near zero elsewhere | Guard ASR could rise substantially. | Encoding is the canonical classifier bypass. The judge now detects normalized, base64, hex, reversed and split leaks, so the constraint is no longer needed. Prompt-level defenses do not care how the id is written. |
+| Injection slots: position, bounce message, tool description | Implemented: append/prepend/middle/bounce/tool_description profiles; failed delivery never scores as a send. Effect unmeasured. | Medium | Uncertain. Plausibly large for the bounce message. | Injection while the agent is mid-action is well documented as stronger. Position effects are real but smaller. Highest implementation cost on this list. |
 | Relay-aware attack | Done (`relay_action_item`) | Medium | multi_agent rows only. | The summarizer is told to list recipients and action items. That instruction is targetable, but the id must survive two hops. |
 | Guard-directed attack | Done (`guard_injection`) | Medium-high against the guard only | Guard ASR up. | The guard reads the attacker-influenced body. Once the guard fences its input, this attack weakens. |
-| AgentDojo `tool_knowledge` port | Not done | Medium | Moderate. | Among the strongest templated attacks in the AgentDojo paper. The named-user gap remains. |
-| Replay library | Not done | Does not raise ASR | Changes honesty, not strength. | Tells you whether a tree win at temperature was luck. Expect reported adaptive ASR to fall. |
-| Remove oracle knowledge of the secret label | Not done. Every attack still names the "instance id". | High that it lowers ASR | Numbers go down. | Attacks currently know the deployment's variable name. Realism, not strength. |
+| AgentDojo `tool_knowledge` port | Implemented local tool/placeholder adaptation and registered in CLI/AgentDojo experiment. Effect unmeasured. | Medium | Moderate. | The named-user gap remains; the adaptation uses a scenario sender rather than a known real user. |
+| Replay library | Implemented: PAIR/TAP best payloads, versioned provenance, frozen replay, disjoint discovery/replay seeds. | Does not raise ASR | Changes honesty, not strength. | Tests transfer of a discovered candidate to fresh canaries without regeneration. Repeated stochastic runs still needed to assess luck. |
+| Remove oracle knowledge of the secret label | Implemented optional known/unknown initial-knowledge profiles. Adaptive feedback can reveal a label. Effect unmeasured. | High that it lowers ASR | Numbers go down. | Attacks currently know the deployment's variable name. Realism, not strength. |
 
 ## Defense side
 
@@ -62,9 +62,22 @@ Attack side first.
 1. AttackContext contract and scenario fields (enabler). Done.
 2. Templated hand-crafted attacks, retargeted `public_identifier` and `forged_boundary`, guard-directed and relay-aware classes. Done.
 3. PAIR rewrite around the destination-aware objective with the redacted observation feedback. Done.
-4. TAP scorer, critic as tiebreaker, dedup, technique memory, partial-JSON salvage, keep `best_payload`, lift the verbatim constraint. Done.
+4. TAP scorer, critic as tiebreaker, dedup, technique memory, partial-JSON salvage, keep `best_payload`, lift the verbatim constraint. Implemented, including PAIR best-payload persistence and encoding guidance.
 5. Fresh baseline sweep, then measure. Not done. The only results newer than the attack rewrite are three errored episodes from a retired Groq model.
-6. Injection slots and `tool_knowledge` port as a second wave. Not started.
+6. Injection slots and `tool_knowledge` port as a second wave. Implemented; compare each surface separately after the baseline.
+7. Freeze successful adaptive discoveries, then replay on at least 30 held-out seeds per candidate/profile. CLI implementation complete; real-model evaluation pending.
+8. Compare known vs unknown secret-label profiles with identical target settings. Implementation complete; real-model evaluation pending.
+
+### Attack-side acceptance tasks still open
+
+- [x] Implement and regression-test the attack profiles, tool-knowledge adaptation, and frozen replay.
+- [ ] Run a fresh append/known baseline on current target and attacker models with at least 30 seeds per cell; preserve config, model versions, budgets, results, and errors.
+- [ ] Run one-factor comparisons for positions, delivery bounce, and tool metadata, keeping target task/defense/budget fixed. Compare utility as well as ASR; a bounce may lower utility independently of malicious instructions.
+- [ ] Measure `tool_knowledge` and PAIR encoding guidance against the same baseline.
+- [ ] Save successful discovery payloads with `--save-replay-library`, replay with `--replay-library` on disjoint seeds, and report replay ASR separately from discovery break rate. Repeat stochastic runs before claiming repeatability.
+- [ ] Compare known/unknown profiles, documenting that the attacker still knows public task facts and may learn from redacted feedback.
+
+Commands, threat-profile semantics, and replay limitations are in `attacks.md`. Offline tests establish pipeline behavior, not real-model attack strength or a guarantee that an agent is safe to deploy.
 
 Defense side after that, starting with `bind(ctx)` and the two deterministic defenses. Items 1 to 6 of track 3 done on 2026-10-11 (offline-verified); the quarantined reader is not started.
 
@@ -82,7 +95,7 @@ Nothing here changes an attack or a defense; it makes the other two tracks' resu
 
 1. Fresh baseline sweep on `main` as of 2026-10-11: three adapters, four scenarios, every attack, every defense, 30 seeds per cell, on the deployed models (`gpt-4.1-mini`, `DeepSeek-V4-Pro`, `gpt-5.6-luna`).
 2. No-attack control run, so a defense's utility cost can be separated from attack disruption.
-3. Replay library, so a tree-search win at temperature can be checked for luck.
+3. Replay library, so a tree-search win at temperature can be checked for luck. Implementation complete; held-out real-model evaluation pending.
 4. Stacked defenses as a measurement feature (a composite that applies several rungs), so L1+L2 and L2+allowlist cells exist when track 3 lands.
 5. Rewrite `findings.md` from the new results and refresh the deck numbers.
 
@@ -92,9 +105,9 @@ Owns attack strength and realism.
 All four items are independent of track 3 and of each other.
 
 1. Lift the verbatim-only constraint in the PAIR and TAP prompts; the judge already detects encoded and split leaks. Done 2026-10-11.
-2. Remove oracle knowledge of the secret label from every attack.
-3. Port AgentDojo's `tool_knowledge` attack.
-4. Injection slots: position within the tool result, a bounce message mid-action, and the tool description. Highest cost, last.
+2. Remove supplied oracle knowledge of the secret label from stock attacks. Implemented optional known/unknown profiles; feedback can still reveal a label.
+3. Port AgentDojo's `tool_knowledge` attack. Implemented local adaptation; effectiveness unmeasured.
+4. Injection slots: position within the tool result, a bounce message mid-action, and the tool description. Implemented; effectiveness unmeasured.
 
 ### Track 3: defense side
 
