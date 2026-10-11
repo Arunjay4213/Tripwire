@@ -18,9 +18,14 @@ The decision is selected by the model id in the request:
   fake/attacker    a PAIR/TAP attacker model: returns a structured refinement.
   fake/guard-block, fake/guard-allow
                    verdicts for the outbound_guard detector prompt.
-  fake/guard-error an HTTP 400 on every request (a dead guard model; 400 so
-                   the SDK does not spend seconds retrying it the way it
-                   would a 5xx).
+  fake/guard-error, fake/reader-error
+                   an HTTP 400 on every request (a dead guard or extractor
+                   model; 400 so the SDK does not spend seconds retrying it
+                   the way it would a 5xx).
+
+A request whose system message is the quarantined reader's extractor prompt
+is answered as a faithful typed extraction of the fenced document (see
+faithful_extract), for any model id.
   fake/rejected    an HTTP 404 on every request (a model the provider does not
                    serve: the realistic misconfiguration).
 
@@ -44,12 +49,39 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any
 
 from tripwire.defenses.outbound_guard import _DETECTOR_SYSTEM_PROMPT
+from tripwire.defenses.quarantined_reader import CLOSE_TAG, EXTRACTOR_SYSTEM_PROMPT, OPEN_TAG
 
 CANARY_RE = re.compile(r"instance id for this session is ([0-9a-f]{32})")
+FIELD_LINE_RE = re.compile(r"^- (\w+): .* \(kind: (\w+)\)$", re.MULTILINE)
 HEX32_RE = re.compile(r"[0-9a-f]{32}")
 EMAIL_RE = re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")
 
 FALLBACK_ATTACKER = "attacker@evil.com"
+
+
+def faithful_extract(document: str, fields: list[tuple[str, str]]) -> dict[str, Any]:
+    """A competent, honest extractor over the four built-in scenarios' content:
+    pulls each requested (name, kind) out of the document by shape and never
+    copies an instruction. The quarantined reader's unit tests and the fake
+    provider's extractor policy both use it."""
+    out: dict[str, Any] = {}
+    for name, kind in fields:
+        value = None
+        if kind == "money":
+            m = re.search(r"\$\d[\d,]*(?:\.\d{2})?", document)
+            value = m.group(0) if m else None
+        elif kind == "date":
+            m = re.search(r"\d{4}-\d{2}-\d{2}(?: \d{2}:\d{2}(?:-\d{2}:\d{2})?)?", document)
+            value = m.group(0) if m else None
+        elif kind == "short_text":
+            if (m := re.search(r"Resolution:\s*([^.]+)", document)):
+                value = m.group(1).strip()
+            elif (m := re.search(r"'([^']+)'", document)):
+                value = m.group(1).strip()
+            else:
+                value = document.split(".")[0][:100].strip() or None
+        out[name] = value
+    return out
 
 
 def _text(content: Any) -> str:
@@ -126,12 +158,14 @@ class FakeProvider:
         if policy == "rejected":
             return 404, {"error": {"message": f"The model `{model}` does not exist",
                                    "type": "invalid_request_error", "code": "model_not_found"}}
-        if policy == "guard-error":
-            return 400, {"error": {"message": "guard model unavailable",
+        if policy in ("guard-error", "reader-error"):
+            return 400, {"error": {"message": f"{policy.split('-')[0]} model unavailable",
                                    "type": "invalid_request_error"}}
 
         if messages and _text(messages[0].get("content")) == _DETECTOR_SYSTEM_PROMPT:
             return 200, self._completion(model, self._verdict(policy, messages))
+        if messages and _text(messages[0].get("content")) == EXTRACTOR_SYSTEM_PROMPT:
+            return 200, self._completion(model, self._extraction(messages))
         if policy == "attacker":
             return 200, self._completion(model, self._attacker_turn(messages))
 
@@ -148,6 +182,16 @@ class FakeProvider:
             return "ALLOW"
         user_text = _text(messages[-1].get("content"))
         return "BLOCK" if HEX32_RE.search(user_text) else "ALLOW"
+
+    @staticmethod
+    def _extraction(messages: list[dict[str, Any]]) -> str:
+        """Answer the quarantined reader's request like a competent extractor:
+        the fenced document and the field list are parsed from the user turn."""
+        request = _text(messages[-1].get("content"))
+        start, end = request.find(OPEN_TAG), request.find(CLOSE_TAG)
+        document = request[start + len(OPEN_TAG):end] if start != -1 and end != -1 else request
+        fields = FIELD_LINE_RE.findall(request)
+        return json.dumps(faithful_extract(document, fields))
 
     @staticmethod
     def _attacker_turn(messages: list[dict[str, Any]]) -> str:

@@ -35,6 +35,7 @@ from tripwire.attacks.tree_attacker import TreeAttacker
 from tripwire.defenses.base import Defense, NoDefense
 from tripwire.defenses.outbound_guard import OutboundGuard
 from tripwire.defenses.prompt_hardening import PromptHardening, Sandwich
+from tripwire.defenses.quarantined_reader import QuarantinedReader
 from tripwire.defenses.recipient_allowlist import RecipientAllowlist
 from tripwire.defenses.secret_egress_scan import SecretEgressScan
 from tripwire.defenses.spotlighting import Datamarking, Spotlighting
@@ -54,6 +55,7 @@ _DEFENSE_REGISTRY: dict[str, type] = {
     "recipient_allowlist": RecipientAllowlist,
     "secret_egress_scan": SecretEgressScan,
     "taint_tracking": TaintTracking,
+    "quarantined_reader": QuarantinedReader,
 }
 
 # Registry of known attack names -> classes. Each is instantiated with cls()

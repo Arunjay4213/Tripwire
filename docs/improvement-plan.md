@@ -45,7 +45,7 @@ Nothing in this table has been measured on a real model yet.
 | Guard hardening: fenced input, authorized recipients, deterministic pre-check | Done, offline-verified | Fenced input and fail-closed were already done. Added `recipient_context` (default on): the user's recipients are written before the fence as trusted, and the detector prompt says to block a send to anyone else. Added `precheck` (opt-in): the judge's matcher blocks the secret with no model call. It is off by default because every leak here carries the secret, so with it on this row would equal `secret_egress_scan`. Offline: a guard model that allows everything leaks without the pre-check and is blocked with it. | High against prerequisite_mirror | Guard ASR down a lot. | Given the recipient, the guard can see the send is unauthorized. This converges toward the deterministic allowlist. |
 | Agent B coverage in multi_agent | Done, offline-verified | `EpisodeSpec.system_prompt_wrapper` (the defense's `wrap_system_prompt`) is applied to B's own persona, and A's summary passes through `wrap_tool_result` as the pseudo-tool `handoff`, so it is fenced, marked or taint-tracked like any tool output. The strict expected failure in `tests/test_e2e.py` now passes and is a normal test; a new test checks the handoff is fenced under spotlighting. This changes the existing `multi_agent` rows. | High for multi_agent rows | Brings multi_agent L1/L2 to roughly single-agent levels. | Before this, the agent that sends email had no defense at all. |
 | Taint tracking | Done, offline-verified | `taint_tracking`: every address in a non-sink tool's output (the relay handoff included) that is not in the user's request is tainted; a send to a tainted address is blocked; the set resets every episode. Offline: obedient agent 0% ASR, compliant agent 100% utility. Known gap: an address the model reconstructs from obfuscated text ("ap at corp dot com") is not caught; the allowlist is. | High for redirect attacks, with false-positive risk | Blocks any decoy address that first appeared in tool output. | Every current redirect address appears only in tool results. Legitimate recipients appear in the user message, so utility should hold in the four scenarios. |
-| Quarantined reader (CaMeL-style typed extraction) | Not started | Nothing yet. | Medium | Strong in the literature. Utility cost unknown here. | Highest implementation cost. Needs typed extraction per scenario. |
+| Quarantined reader (CaMeL-style typed extraction) | Done, offline-verified (2026-10-11) | `quarantined_reader`: each scenario declares typed fields (`Scenario.extraction`, on `DefenseContext.fields`); an extractor model returns only those as JSON; every value is validated by kind; the agent sees the record, never the text. Fails closed. Tests: every scenario keeps its task marker with three registered attacks appended and the decoy never reaches the record; a poisoned value is dropped; end to end, the document reaches only the extractor request. Effect unmeasured. | Medium | Strong in the literature. Utility cost unknown here. | Highest implementation cost. Needs typed extraction per scenario. |
 | No-attack control run | Not started (track 1, item 2) | Nothing yet. | Measurement only | Separates a defense's utility cost from attack disruption. | Needed to say anything about cost. |
 
 Also done on the defense track, outside the table:
@@ -79,7 +79,7 @@ Attack side first.
 
 Commands, threat-profile semantics, and replay limitations are in `attacks.md`. Offline tests establish pipeline behavior, not real-model attack strength or a guarantee that an agent is safe to deploy.
 
-Defense side after that, starting with `bind(ctx)` and the two deterministic defenses. Items 1 to 6 of track 3 done on 2026-10-11 (offline-verified); the quarantined reader is not started.
+Defense side after that, starting with `bind(ctx)` and the two deterministic defenses. Items 1 to 7 of track 3 done on 2026-10-11 (offline-verified), the quarantined reader last.
 
 Done since this plan was written but outside its scope, see `test-audit-2026-10-11.md`: an end-to-end test layer, eleven measurement and robustness bugs fixed, and the test suite pruned.
 
@@ -120,7 +120,7 @@ Item 1 is the enabler and goes first; items 2 and 3 are the headline and come ne
 4. Agent B coverage in multi_agent, which flips the expected failure in `tests/test_e2e.py`. Done.
 5. L1/L2 wording: recipient anchoring, datamarking, sandwich. Done in code, not measured.
 6. Taint tracking. Done.
-7. Quarantined reader, only if time remains. Not started.
+7. Quarantined reader. Done 2026-10-11.
 
 Status 2026-10-11: items 1 to 6 are on branch `soham/defense-track`, each covered offline (unit tests plus `tests/test_e2e.py` through the fake provider).
 None is measured on a real model yet; every one needs its track-1 comparison before its number is quoted.

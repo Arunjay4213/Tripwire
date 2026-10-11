@@ -48,6 +48,26 @@ def addresses_in(text: str) -> frozenset[str]:
     return frozenset(m.lower() for m in _ADDRESS.findall(text))
 
 
+# The value kinds a typed extraction may declare. Each has a validator in
+# defenses/quarantined_reader.py; a value that does not fit its kind is
+# dropped, which is what keeps an injected instruction out of a field.
+FIELD_KINDS = ("money", "short_text", "date")
+
+
+@dataclass(frozen=True)
+class TypedField:
+    """One value the task needs from untrusted content, with the kind that
+    constrains what it may contain."""
+
+    name: str
+    kind: str
+    description: str
+
+    def __post_init__(self) -> None:
+        if self.kind not in FIELD_KINDS:
+            raise ValueError(f"field {self.name!r}: kind must be one of {FIELD_KINDS}, got {self.kind!r}")
+
+
 @dataclass(frozen=True)
 class DefenseContext:
     """What the deployment knows about one episode before the agent runs.
@@ -70,6 +90,10 @@ class DefenseContext:
     # Tools whose output is external, attacker-influenced content.
     untrusted_tools: frozenset[str] = frozenset()
     sink_tools: frozenset[str] = DEFAULT_SINK_TOOLS
+    # The typed values the task needs from the untrusted tools' content, for a
+    # defense that extracts them instead of showing the agent the raw text
+    # (quarantined_reader). An operator knows these: they define the job.
+    fields: tuple[TypedField, ...] = ()
 
     @property
     def user_recipients(self) -> frozenset[str]:

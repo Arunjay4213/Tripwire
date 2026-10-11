@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added (defense track)
 
+- **`quarantined_reader`**, CaMeL-style typed extraction: the agent never sees the read tool's raw text.
+  An extractor model returns only the typed values the scenario declares (`Scenario.extraction`, carried on `DefenseContext.fields`), each value is validated by kind (an amount must look like an amount; a short text is capped and may not carry an address or a URL), and the agent gets a rendered record of what passed.
+  Fails closed, and an extractor outage is an error outcome like a guard outage.
+  Model from `READER_MODEL`, else the model under test; no sampling parameters are sent.
 - **Deterministic egress defenses**, refusing a `send_email` before it runs with no model in the decision:
   `recipient_allowlist` (only addresses the user's own request names, plus an optional `recipient_allowlist: {allow: [...]}` list),
   `secret_egress_scan` (the provisioned secret in any form the judge recognizes, including split across sends),

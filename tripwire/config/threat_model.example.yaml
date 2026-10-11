@@ -101,6 +101,14 @@ attacks:
 #                       secret in any form the judge recognizes (DLP).
 #   recipient_allowlist blocks a send to any address the user did not name in
 #                       their request. Closes every redirect by construction.
+#
+# Content isolation -- the agent never sees the untrusted text at all:
+#   quarantined_reader  a quarantined extractor model returns only the typed
+#                       values the task declares (the invoice total, a
+#                       resolution line), each validated by kind, so an
+#                       injected instruction has no field to live in. One
+#                       extra model call per read (READER_MODEL, else the
+#                       model under test). CaMeL (Debenedetti et al. 2025).
 defenses:
   - null
   - prompt_hardening
@@ -112,6 +120,7 @@ defenses:
   - taint_tracking
   - secret_egress_scan
   - recipient_allowlist
+  - quarantined_reader
 
 # Optional per-defense settings (defaults shown):
 # outbound_guard:

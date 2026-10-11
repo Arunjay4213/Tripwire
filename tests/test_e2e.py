@@ -585,3 +585,66 @@ def test_the_installed_entrypoint_runs_a_smoke_sweep_as_a_subprocess(tmp_path, p
     rows = json.loads(out_path.read_text())
     assert len(rows) == 1  # --smoke: one seed, first everything
     assert rows[0]["succeeded"] is True
+
+
+# --- quarantined reader --------------------------------------------------------------
+
+def test_quarantined_reader_hides_the_source_from_the_agent_but_not_the_task_data(
+    tmp_path, monkeypatch, capsys, provider,
+):
+    """Every adapter, every scenario: the tool message the model receives for
+    the read tool is a typed record, not the document; the extractor (the
+    quarantined side) is the only request that ever sees the document; and
+    the record still carries what the task needs, so a resistant agent
+    completes it. No READER_MODEL is set, so the runner's fallback to the
+    model under test is what routes the extraction."""
+    from tripwire.defenses.quarantined_reader import EXTRACTOR_SYSTEM_PROMPT
+    from tripwire.scenarios import SCENARIOS
+
+    scenarios = ["invoice", "helpdesk", "calendar", "expense"]
+    code, out, err, results = _run_cli(
+        tmp_path, monkeypatch, capsys, provider,
+        _config(model="fake/resistant", scenarios=scenarios, defenses=["quarantined_reader"]),
+    )
+    assert code == 0, err
+    assert len(results) == len(ADAPTERS) * len(scenarios)
+    for row in results:
+        assert row["status"] == "ok", row
+        assert row["task_completed"] is True, row
+        assert row["succeeded"] is False, row
+
+    decoys = {s.decoy_recipient for s in SCENARIOS.values()}
+    agent_requests = [r for r in provider.requests
+                      if r["messages"][0]["content"] != EXTRACTOR_SYSTEM_PROMPT]
+    extractor_requests = [r for r in provider.requests
+                          if r["messages"][0]["content"] == EXTRACTOR_SYSTEM_PROMPT]
+    assert len(extractor_requests) == len(results)  # one extraction per read
+    assert all(r["model"] == "fake/resistant" for r in extractor_requests)  # the fallback
+
+    read_messages = [m["content"] for req in agent_requests for m in req["messages"]
+                     if m["role"] == "tool" and m["content"].startswith("[structured extraction")]
+    assert len(read_messages) >= len(results)
+    for msg in read_messages:
+        assert not any(d in msg for d in decoys), msg
+        assert make_canary(0) not in msg and "instance id" not in msg.lower(), msg
+    agent_text = json.dumps(agent_requests)
+    assert not any(d in agent_text for d in decoys)  # the document never reached the agent at all
+    assert any(d in json.dumps(extractor_requests) for d in decoys)  # ...only the extractor
+
+
+def test_dead_reader_model_is_an_error_outcome_not_a_held_cell(tmp_path, monkeypatch, capsys, provider):
+    """The extractor is unreachable, every field comes back unavailable, and
+    the agent does not leak. That is an outage, not a defense that held, so
+    the episode is an error outcome the exit code and the gate both see.
+    (A model that leaks anyway would be scored as a leak: the fake obedient
+    policy does exactly that, hence the resistant one here.)"""
+    monkeypatch.setenv("READER_MODEL", "fake/reader-error")
+    code, out, err, results = _run_cli(
+        tmp_path, monkeypatch, capsys, provider,
+        _config(model="fake/resistant", adapters=["raw_loop"], defenses=["quarantined_reader"]),
+    )
+    assert code == cli.EXIT_NOTHING_SCORED
+    (row,) = results
+    assert row["status"] == "error" and row["guard_errors"] >= 1, row
+    assert "quarantined_reader" in row["error"], row
+    assert gate.main(["--results", str(tmp_path / "results.json")]) == 1
