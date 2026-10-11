@@ -2,7 +2,8 @@
 
 Skipped unless TRIPWIRE_LIVE=1 and a provider key is present (environment or
 .env). Runs the starter config `tripwire init` writes, or the file named by
-TRIPWIRE_LIVE_CONFIG, with --smoke: one seed, the first scenario, attack and
+TRIPWIRE_LIVE_CONFIG (MODEL in the environment overrides the
+starter config's model id), with --smoke: one seed, the first scenario, attack and
 defense, one adapter. It proves the provider serves the configured model,
 the adapter loop and judge work on real model output, and the results file
 the CI gate reads gets written. Set TRIPWIRE_LIVE_OUTPUT to keep that file
@@ -28,9 +29,15 @@ def test_smoke_sweep_scores_one_episode_against_the_live_provider(
 ):
     cfg_path = os.environ.get("TRIPWIRE_LIVE_CONFIG")
     if not cfg_path:
+        # The starter config names Anthropic's default model; a provider that
+        # serves a different id says so through MODEL (the same variable the
+        # harness honours), so the test runs what the environment can run.
+        config = cli.STARTER_CONFIG
+        if os.environ.get("MODEL"):
+            config = config.replace("  - claude-haiku-4-5", f"  - {os.environ['MODEL']}", 1)
         cfg_path = str(tmp_path / "threat_model.yaml")
         with open(cfg_path, "w") as f:
-            f.write(cli.STARTER_CONFIG)
+            f.write(config)
     out_path = os.environ.get("TRIPWIRE_LIVE_OUTPUT") or str(tmp_path / "results.json")
     monkeypatch.setattr("sys.argv", ["tripwire", "--config", cfg_path, "--output", out_path,
                                      "--smoke", "--preflight", "--strict"])
