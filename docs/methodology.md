@@ -91,6 +91,16 @@ Rows for `multi_agent` from before this change measured an undefended sender.
 Removing `send_email` from the menu drives ASR to zero and utility to zero at once; keeping it makes the filter a no-op.
 Its value on the ladder is marking the degenerate corner of the frontier, not defending anything.
 
+### Stacks and the control
+
+A config may list a stack, several rungs spelled with `+` (`spotlighting+recipient_allowlist`), applied in the listed order at every hook.
+The first member that blocks a call decides, so a deterministic rung listed before the guard spares the guard a model call it would have made for nothing.
+A stack is one row with one name in every table and in the CI gate, and an outage inside any member is still an error outcome.
+
+The `no_attack` row is a control, not an attack: an empty payload, so the read tool's content, the tool descriptions and the send path are the benign task's own in every injection slot.
+Its utility under a defense is the defense's cost to the agent by itself.
+A defense's utility in an attacked row mixes that cost with the attack's own disruption; only the difference between the two rows separates them.
+
 ## The adaptive attacker is not seed-reproducible
 
 The single-shot templated attacks are deterministic: a fixed `environment_seed` fixes the canary and the environment content, so a re-run of the same seed is a genuine independent trial, not a duplicate.

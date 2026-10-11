@@ -7,6 +7,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added (defense track)
 
+- **Stacked defenses.** `defenses: [spotlighting+recipient_allowlist]` applies several rungs to one episode in the listed order; the first member that blocks decides, errors are summed so an outage inside a stack is still an error outcome, and the runner's model fallback reaches each member.
+  One name, one row, one gate filter.
+- **`no_attack`**, the control: an empty payload, so the benign task runs exactly as it is in every injection slot.
+  Its utility under a defense is the defense's own cost to the agent, which the attacked rows cannot show.
 - **`quarantined_reader`**, CaMeL-style typed extraction: the agent never sees the read tool's raw text.
   An extractor model returns only the typed values the scenario declares (`Scenario.extraction`, carried on `DefenseContext.fields`), each value is validated by kind (an amount must look like an amount; a short text is capped and may not carry an address or a URL), and the agent gets a rendered record of what passed.
   Fails closed, and an extractor outage is an error outcome like a guard outage.

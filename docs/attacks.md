@@ -61,6 +61,7 @@ Attacks fall into three families.
 | `relay_action_item` | hand-crafted | phrase the leak as an action item the summarizer copies in full | multi_agent relay |
 | `iterative` | adaptive (LLM) | PAIR-style propose/score/refine loop | any |
 | `tree_attacker` | adaptive (LLM) | TAP-style tree search with an LLM critic | any |
+| `no_attack` | control | nothing: an empty payload, the benign task exactly as it is in every injection slot | (measures a defense's own utility cost) |
 
 The templated attacks are the standard baselines from the literature.
 They score at or near 0% against an aligned target because a hardened model recognizes and ignores a blatant "ignore your instructions" side-command.
