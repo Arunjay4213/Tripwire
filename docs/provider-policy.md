@@ -1,9 +1,21 @@
-# Provider policy — adversarial / security testing (roadmap §0.3)
+# Provider policy - adversarial / security testing (roadmap §0.3)
 
 ToS gate. **Do not run attacks at volume until the relevant row is filled in.**
 Read each provider's CURRENT usage policy for adversarial/injection testing,
 confirm which account type to use, record below. If a provider prohibits it on
 standard accounts, use open models via a self-hosted or permissive endpoint.
+
+## Provider support in the harness
+
+The harness is provider-agnostic.
+It talks to any OpenAI-compatible endpoint, chosen by environment variables (see `tripwire/harness/llm.py`).
+`OPENAI_API_KEY` with `OPENAI_BASE_URL` points it at any such endpoint.
+Built-in presets exist for Anthropic (`ANTHROPIC_API_KEY`), OpenRouter (`OPENROUTER_API_KEY`) and Groq (`GROQ_API_KEY`).
+Each preset also has `_BASE_URL` and `_MODEL` overrides, and `MODEL` pins one model id for a whole sweep.
+Azure AI Foundry's OpenAI-compatible endpoint works through `OPENAI_BASE_URL` with no code change.
+The starter config from `tripwire init` defaults to `claude-haiku-4-5`.
+Groq retired `llama-3.3-70b-versatile`, so the example configs now use `openai/gpt-oss-20b`.
+The table below is about each provider's terms, not about what the harness can technically call.
 
 ## Summary table
 
@@ -16,7 +28,7 @@ standard accounts, use open models via a self-hosted or permissive endpoint.
 
 ## Detailed notes
 
-### Groq (current provider)
+### Groq
 
 Policy prohibits "gain unauthorized access to, attack, abuse, interfere with,
 intercept, disrupt, or exploit any users, systems, or services" and
@@ -70,7 +82,9 @@ proactively.
 
 Until exceptions/authorizations are obtained:
 
-1. **Groq + open models** (Llama) — safest. Open model weights, we test our own
-   agent, not Groq's infrastructure. Still request exception for volume.
-2. **Self-hosted open models** — no ToS concern at all. Slower, costs more.
-3. **Closed-model APIs** — do not run until authorized.
+1. **Groq + open models** (for example openai/gpt-oss-20b) - safest.
+   Open model weights, we test our own agent, not Groq's infrastructure.
+   Still request exception for volume.
+2. **Self-hosted open models** - no ToS concern at all.
+   Slower, costs more.
+3. **Closed-model APIs** - do not run until authorized. 

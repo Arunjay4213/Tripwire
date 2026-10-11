@@ -9,6 +9,8 @@
 
 Tripwire drops your tool-using agent into realistic tasks, attacks it with a suite of prompt injections, and answers one question with pure Python (no LLM judge, no ambiguity): **did the agent leak a planted secret to somewhere it shouldn't?** You get an attack-success-rate table with confidence intervals, and a plain-English report of which attacks got through and how to defend against them.
 
+Illustrative output (the numbers are an example of the format, not a measured result):
+
 ```console
 $ tripwire --config threat_model.yaml --agent my_agent.py
 
@@ -71,12 +73,12 @@ Your agent just needs to expose `run(spec) -> NormalizedTrace` (or an `adapter` 
 ## What you get
 
 - **Bring your own agent.** One contract - `EpisodeSpec` in, `NormalizedTrace` out - and any agent, any framework, gets the same evaluation.
-- **16 attacks.** Templated baselines (ported from AgentDojo, including `tool_knowledge`), hand-crafted attacks that actually break real defenses (including `mundane_redirect`, the first to beat the input-side ones), and two adaptive attackers (PAIR-style and TAP-style tree search with an LLM critic). Optional profiles move the injection (prepend, middle, a bounced-delivery notice, the tool description) and hide the secret's label from the attacker; successful adaptive payloads can be frozen and replayed on held-out seeds. → [docs/attacks.md](docs/attacks.md)
-- **A defense ladder.** Instruction-level rungs (`prompt_hardening`, `sandwich`, `spotlighting`, `datamarking`), a second-model `outbound_guard`, a `quarantined_reader` that shows the agent only typed fields extracted from untrusted content, and deterministic egress checks (`taint_tracking`, `secret_egress_scan`, `recipient_allowlist`) that no injected text can talk past - each measured for security *and* utility, so you see the trade-off, not a single point. Stack rungs with `+` (`spotlighting+recipient_allowlist`), and run the `no_attack` control to see what a defense costs on its own. Every defense reaches every agent, including the sender in a multi-agent relay.
+- **17 attacks.** Templated baselines (ported from AgentDojo, plus `tool_knowledge`), hand-crafted attacks (`metadata_exfil`, `public_identifier`, `forged_boundary`, `prerequisite_mirror`, `mundane_redirect`, `guard_injection`, `relay_action_item`, `fixed_injection`), two adaptive attackers (PAIR-style and TAP-style tree search with an LLM critic), and `no_attack`, a control with an empty payload that measures false positives and the utility cost of a defense. Injection slots and profiles (append, prepend, middle, bounce, tool_description) are configurable. → [docs/attacks.md](docs/attacks.md)
+- **A defense ladder.** Instruction-level rungs (`prompt_hardening`, `sandwich`, `spotlighting`, `datamarking`), model-based rungs (`outbound_guard`, a second-model check that fails closed by default, and `quarantined_reader`), and deterministic egress checks (`taint_tracking`, `secret_egress_scan`, `recipient_allowlist`, `tool_filter`) that no injected text can talk past - each measured for security *and* utility, so you see the trade-off, not a single point. Defenses can be stacked in the config as `a+b`. Every defense reaches every agent, including the sender in a multi-agent relay.
 - **Realistic scenarios.** `invoice`, `helpdesk`, `calendar`, `expense` - each a different task with its own authorized recipient. Your agent is tested across all of them.
 - **Actionable feedback.** Every run ends with a per-attack report: what leaked, why, and the concrete fix.
 - **Deterministic, honest scoring.** Pure-Python judge (no LLM), fixed seeds, Wilson confidence intervals instead of bare percentages. Runs in CI.
-- **Framework-agnostic.** Reference adapters for a raw tool loop, LangGraph, a multi-agent LangGraph relay, and CrewAI - all behind one contract, so cross-framework comparison is fair.
+- **Framework-agnostic.** Reference adapters for a raw tool loop, LangGraph, a multi-agent LangGraph relay, and CrewAI (optional extra) - all behind one contract, so cross-framework comparison is fair.
 - **Real AgentDojo, too.** A [bridge](docs/sample-agents-and-agentdojo.md) runs actual AgentDojo workspace tasks with AgentDojo's own environment-state scoring.
 
 ## How it works
@@ -92,29 +94,40 @@ Every framework plugs in behind one contract (`tripwire/adapters/base.py`): it t
 
 ## Gate it in CI
 
-A change that reopens a leak can fail the build. [`.github/workflows/asr-gate.yml`](.github/workflows/asr-gate.yml) runs the offline test suite on every push, then (given a provider key) runs a smoke attack sweep against your defended config and fails if ASR exceeds a threshold:
+A change that reopens a leak can fail the build.
+[`.github/workflows/asr-gate.yml`](.github/workflows/asr-gate.yml) runs the offline test suite on every push, then (given a provider key) runs `tests/test_live.py` (a real smoke sweep, enabled by `TRIPWIRE_LIVE=1`) against your defended config and fails if ASR exceeds a threshold.
+The example CI config gates on `recipient_allowlist`.
+The same steps by hand:
 
 ```bash
 tripwire --config tripwire/config/ci.example.yaml --smoke --output results.json
 python scripts/ci/check_asr_threshold.py --results results.json --threshold 0.5
 ```
 
+The gate fails on the worst cell, not the pooled mean, and also supports `--min-n`, `--use-upper-bound`, `--max-error-rate`, `--defense` and `--adapter`.
+A `--smoke` run scores one episode per cell, so it checks the wiring, not the agent.
+
 ## Documentation
 
 | | |
 |---|---|
-| [Attacks](docs/attacks.md) | every attack, what it exploits, and its measured effect |
-| [Findings](docs/findings.md) | headline results: attack vs defense, across scenarios |
+| [Attacks](docs/attacks.md) | every attack, what it exploits, and its earlier measured effect |
+| [Findings](docs/findings.md) | historical results (pre-2026-10-11 codebase, not comparable to current runs) |
 | [Methodology](docs/methodology.md) | the scoring rules and why they're built that way |
 | [Instrument your agent](docs/instrument-your-agent.md) | wire your own agent in |
 | [Sample agents & AgentDojo](docs/sample-agents-and-agentdojo.md) | vibecoded-agent examples + the AgentDojo bridge |
+| [Test audit](docs/test-audit-2026-10-11.md) | the 2026-10-11 test-suite audit and the bugs it found |
+| [Enterprise readiness roadmap](docs/enterprise-readiness-roadmap.md) | positioning and roadmap for using Tripwire as a pre-deployment release gate |
+| [Improvement plan](docs/improvement-plan.md) | status tables for the audit, attack and defense work |
+| [Experiments](docs/experiments.md) | experiment log |
+| [Provider policy](docs/provider-policy.md) | provider terms of service constraints on running sweeps |
 
 ## Development
 
 ```bash
 git clone https://github.com/Arunjay4213/Tripwire && cd Tripwire
 pip install -e ".[dev]"     # or: uv pip install -e ".[dev]"
-pytest                      # ~800 offline tests, no network
+pytest                      # ~830 offline tests, no network (~7 s)
 ```
 
 ## License

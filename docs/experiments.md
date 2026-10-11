@@ -1,14 +1,21 @@
 # Experiments
 
-> For the current headline results on `claude-haiku-4-5` (attack vs defense, scenarios, AgentDojo), see `docs/findings.md`.
+> **Status (2026-10-11):** every number below comes from the codebase as it was on 2026-08-08, before the 2026-09-25 audit and the changes of 2026-10-11.
+> They are not comparable to anything the current code produces.
+> Since then the judge was fixed, the attacks were rewritten (including the PAIR attacker), `outbound_guard` began to fail closed, recipient anchoring was added to the instruction-level defenses, and the `multi_agent` relay now applies the defense to Agent B and wraps Agent A's summary.
+> The `multi_agent` result in Experiment 1 in particular predates the relay changes.
+> Nothing has been re-measured on a real model since the audit.
+> Re-running the baseline sweep (these two experiments on the current code) is the open item.
+> Groq has also retired `llama-3.3-70b-versatile`, so the model used here can no longer be called.
+> All scripts cited below still exist under `scripts/experiments/`.
+
+> For the headline results on `claude-haiku-4-5` (attack vs defense, scenarios, AgentDojo), see `docs/findings.md`.
 > This doc is the earlier `llama-3.3-70b` adapter-comparison data - a different question, kept as a historical record.
 
-Real results from running the harness at a scale beyond single-seed smoke
-tests. Recorded here — not just in a local `results/` directory — because
-raw per-seed JSON is regenerable but a specific real run, with its caveats,
-is not something to lose. Every number below came from an actual run against
-Groq; none are estimated or invented. Reproduction scripts are in
-`scripts/experiments/`.
+Historical results from running the harness at a scale beyond single-seed smoke tests.
+Recorded here — not just in a local `results/` directory — because raw per-seed JSON is regenerable but a specific real run, with its caveats, is not something to lose.
+Every number below came from an actual run against Groq on the 2026-08-08 code; none are estimated or invented.
+Reproduction scripts are in `scripts/experiments/`.
 
 **Model**: `llama-3.3-70b-versatile` via Groq. **Date**: 2026-08-08.
 **Note on "seed"**: `environment_seed` fixes the deterministic canary and

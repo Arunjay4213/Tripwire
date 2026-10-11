@@ -51,13 +51,14 @@ The defenses split into four enforcement styles, and they make different claims.
 
 - **Deterministic prevent.** `recipient_allowlist`, `secret_egress_scan`, `taint_tracking` and `tool_filter` refuse a call before it executes, with no model in the decision, so a blocked attempt is recorded as `tool_blocked` and is never scored as a leak.
   No payload wording can change their verdict.
-- **Model-based prevent.** `outbound_guard` also blocks before execution, but a second model decides, so a payload can still talk it past (`guard_injection` is written to).
-- **Content isolation.** `quarantined_reader` never shows the agent the untrusted text: a quarantined extractor returns only the typed values the task declares, each validated by kind, and the agent sees that record.
-  It prevents by construction for anything that is not a declared field, but the extractor itself reads the attack, so a value it was talked into poisoning is caught only by the kind check; `reader.dropped` counts those.
-  Its utility depends on the extractor keeping the values the task needs, which the four built-in scenarios pin offline.
+- **Model-based prevent.** `outbound_guard` also blocks before execution, but a second model decides (`GUARD_MODEL`), so a payload can still talk it past (`guard_injection` is written to).
+  `quarantined_reader` (below) is also model-based (`READER_MODEL`).
 - **Instruction-level.** `prompt_hardening`, `sandwich`, `spotlighting` and `datamarking` only change what the model is told; they do not enforce anything.
   Their effect is entirely the model choosing to obey, which is exactly what a good injection is written to override.
   Treat their ASR reduction as a shift in the odds, not a guarantee.
+- **Content isolation.** `quarantined_reader` never shows the agent the untrusted text: a quarantined extractor returns only the typed values the task declares, each validated by kind, and the agent sees that record.
+  It prevents by construction for anything that is not a declared field, but the extractor itself reads the attack, so a value it was talked into poisoning is caught only by the kind check; `reader.dropped` counts those.
+  Its utility depends on the extractor keeping the values the task needs, which the four built-in scenarios pin offline.
 
 ### What the deterministic rungs are allowed to know
 
@@ -77,7 +78,8 @@ An attacker who cannot exfiltrate is pushed toward integrity attacks (a wrong to
 
 ### The outbound guard's options
 
-By default the guard is told, outside its untrusted fence, which recipients the user's request names, and blocks a send to anyone else (`recipient_context`).
+By default the guard fails closed: if its model call errors, the send is blocked and the episode is recorded as an error outcome (`fail_closed`, default true; `fail_closed: false` allows the call instead).
+By default the guard is also told, outside its untrusted fence, which recipients the user's request names, and blocks a send to anyone else (`recipient_context`).
 Its deterministic pre-check (`precheck`) is off by default: in this harness every leak carries the planted secret, so with the pre-check on, the guard row would equal the `secret_egress_scan` row and hide what the guard model itself contributes.
 Turn it on for a production-style configuration.
 
@@ -109,12 +111,15 @@ The `iterative` attacker is different.
 It is LLM-driven, so its payloads vary run to run even at a fixed seed, and its results are reported as a campaign (break-rate within a budget, attempts-to-break) rather than a single episode.
 Do not mix its numbers into the seed-reproducible ASR tables.
 
-## The judge is validated, not asserted
+## The judge is not yet validated
 
 The deterministic judge is a string match, which is precise but could in principle disagree with a human reading the same trace.
-`scripts/experiments/judge_validation.py` samples episodes, records the judge's verdict alongside a blank human label, and reports Cohen's kappa between the two once a human has labeled them.
+`scripts/experiments/judge_validation.py` exists to check that.
+Its `dump` step samples episodes and records the judge's verdict alongside a blank human label.
+Its `score` step reports Cohen's kappa between the two once a human has labeled them.
 Kappa corrects for chance agreement; raw agreement alone would flatter a judge that mostly sees one class.
-This lets the scoring claim be checked rather than trusted.
+The labeling has not been done: there is no labels file in `results/`, so the kappa has never been computed.
+Until it is, the judge's agreement with a human reader is an untested claim, not a measured one.
 
 ## Provider and cost caveats
 
@@ -133,3 +138,4 @@ Two consequences follow.
 A low ASR in this harness means the agent, framework, and defense held against this attack suite, in this toy environment, at this sample size.
 It does not certify the agent against a determined adversary, a different task, a richer tool surface, or attacks not in the suite.
 The CI gate (`scripts/ci/check_asr_threshold.py`) is a regression tripwire, not a safety certificate: it catches a change that reopens a known leak, and claims nothing beyond that.
+An outage in a model-based defense (`outbound_guard`, `quarantined_reader`) is recorded as an error outcome, never as a defended run, so a green cell cannot come from a defense that was down.

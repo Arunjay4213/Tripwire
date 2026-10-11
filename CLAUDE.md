@@ -14,9 +14,11 @@ Tripwire is an evaluation harness that measures AI agent vulnerability to prompt
 # Install for development (editable, with test + optional extras)
 pip install -e ".[dev]"        # or: uv pip install -e ".[dev]"
 
-# Run all tests (~800 tests, fully offline, ~6s). tests/test_e2e.py runs the real
-# CLI against an in-process fake provider (tests/fake_provider.py); tests/test_live.py
-# runs a real smoke sweep only with TRIPWIRE_LIVE=1 and a provider key.
+# Run all tests (832 passed, 1 skipped, fully offline, ~7s). tests/test_e2e.py runs the real
+# CLI, adapters and SDK against an in-process fake provider (tests/fake_provider.py, an
+# OpenAI-compatible server with scripted policies such as fake/obedient, fake/resistant);
+# tests/test_live.py runs a real smoke sweep only with TRIPWIRE_LIVE=1 and a provider key.
+# tests/scripted_client.py is the one fake client; tests/fake_crewai.py stubs the crewai package.
 python -m pytest tests/ -q
 
 # Run a single test file / test
@@ -54,23 +56,24 @@ Published on PyPI as `tripwire-eval` (the import package and CLI stay `tripwire`
 - `advice.py` - per-attack remediation knowledge base backing the security report.
 - `stats.py` - `wilson_ci()`: Wilson score CI for honest error bounds at small n.
 
-**Adapters** (`tripwire/adapters/`): `raw_loop.py` (minimal ReAct baseline), `langgraph_adapter.py` (single-agent LangGraph), `multi_agent_adapter.py` (LangGraph relay: agent A summarizes the inbox for agent B), `crewai_adapter.py` (CrewAI role/goal crew; optional `[crewai]` extra, imported lazily, records its trace at the tool boundary). `loader.py` also loads a bring-your-own agent file (`--agent`).
+**Adapters** (`tripwire/adapters/`): `raw_loop.py` (minimal ReAct baseline), `langgraph_adapter.py` (single-agent LangGraph), `multi_agent_adapter.py` (LangGraph relay: agent A summarizes the inbox for agent B), `crewai_adapter.py` (CrewAI role/goal crew; optional `[crewai]` extra, imported lazily, records its trace at the tool boundary, honors `spec.max_turns`). Provider message shapes are normalized in `adapters/_common.py`; an implemented tool that is not on the offered menu (`spec.tools`) never runs. `loader.py` also loads a bring-your-own agent file (`--agent`).
 
-**Scenarios** (`tripwire/scenarios.py`): the tasks the agent is attacked on - `invoice` (default), `helpdesk`, `calendar`, `expense`. Each plants the secret, defines a legitimate task + AUTHORIZED recipient, and builds a full `EpisodeSpec`. Selected via `scenarios:` in the config.
+**Scenarios** (`tripwire/scenarios.py`): the tasks the agent is attacked on - `invoice` (default), `helpdesk`, `calendar`, `expense`. Each plants the secret, defines a legitimate task + AUTHORIZED recipient, and builds a full `EpisodeSpec`. Threat-profile fields: `injection_slot` (`append` default, `prepend`, `middle`, `bounce`, `tool_description`) and `secret_label_known` (true/false); `extraction` holds typed fields for the quarantined reader. `defense_context(canary)` builds the `DefenseContext`. Selected via `scenarios:` in the config.
 
-**Defenses** (`tripwire/defenses/`): the ladder - instruction-level `prompt_hardening` and `sandwich` (L1), `spotlighting` and `datamarking` (L2), `tool_filter`, `outbound_guard` (L3, a second model), `quarantined_reader` (content isolation: an extractor returns only the scenario's typed fields, `Scenario.extraction`; model from `READER_MODEL`), and the deterministic egress rungs `taint_tracking`, `secret_egress_scan`, `recipient_allowlist`. Stack rungs with `+` in the config (`spotlighting+recipient_allowlist`, `defenses/stack.py`): one row, members applied in order, first block decides. Four hooks: `wrap_system_prompt`, `filter_tool_calls`, `check_tool_call`, `wrap_tool_result`, plus an optional `bind(ctx)` that `Scenario.build_spec` calls first with a `DefenseContext` (user's request, provisioned secrets, untrusted tools - never the decoy or the judge's authorized set).
+**Defenses** (`tripwire/defenses/`): the ladder - instruction-level `prompt_hardening` and `sandwich` (L1), `spotlighting` and `datamarking` (L2), `tool_filter`, `outbound_guard` (L3, a second model), and the deterministic egress rungs `taint_tracking`, `secret_egress_scan`, `recipient_allowlist`, and the model-based `quarantined_reader` (CaMeL-style typed extraction), plus `null`. Deterministic rungs (no model): `recipient_allowlist`, `secret_egress_scan`, `taint_tracking`, `tool_filter`. Model-based: `outbound_guard` (`GUARD_MODEL`) and `quarantined_reader` (`READER_MODEL`). Stacks are spelled `a+b` in config (`stack.py`). Members run in the listed order and the first member that blocks decides. `outbound_guard` fails closed by default (options `fail_closed`, `recipient_context`, `precheck`); `recipient_allowlist` options are `allow` and `from_user_message`. Four hooks: `wrap_system_prompt`, `filter_tool_calls`, `check_tool_call`, `wrap_tool_result`, plus an optional `bind(ctx)` that `Scenario.build_spec` calls first with a `DefenseContext` (scenario, user's request, provisioned secrets, untrusted and sink tools, extraction fields - never the decoy or the judge's authorized set).
 
-**Attacks** (`tripwire/attacks/`): `base.py` is the `Attack` protocol (`name` + `render(canary) -> str`; attacks never embed the canary). The suite (see `docs/attacks.md`): templated baselines (`agentdojo_wrappers.py`, including the `tool_knowledge` adaptation), hand-crafted attacks (`fixed_injection.py`: metadata_exfil, public_identifier, forged_boundary, prerequisite_mirror, mundane_redirect, guard_injection, relay_action_item), and adaptive attackers (`iterative.py` PAIR, `tree_attacker.py` TAP). Registered in `config/loader.py`. Optional `attack_options` profiles vary the injection slot (`append`, `prepend`, `middle`, `bounce`, `tool_description`) and whether the attacker knows the secret's label (`known`/`unknown`); each profile is its own scenario cell. `replay.py` freezes successful adaptive payloads and replays them on held-out seeds with no attacker calls. `no_attack` (`control.py`) is a control, not an attack: an empty payload, so its utility under a defense is that defense's own cost.
+**Attacks** (`tripwire/attacks/`): `base.py` is the `Attack` protocol (`name` + `render(canary) -> str`; attacks never embed the canary). The suite (see `docs/attacks.md`): templated baselines (`agentdojo_wrappers.py`), hand-crafted attacks (`fixed_injection.py`: fixed_injection, metadata_exfil, public_identifier, forged_boundary, prerequisite_mirror, mundane_redirect, guard_injection, relay_action_item), and adaptive attackers (`iterative.py` PAIR, `tree_attacker.py` TAP), `tool_knowledge`, and `no_attack` (`control.py`, the empty-payload control). `replay.py` is the held-out replay library: `--save-replay-library PATH` saves adaptive payloads, `--replay-library PATH` replays them; per-attack settings come from `attack_options:` in the config. Registered in `config/loader.py`.
 
 ## Key Design Decisions
 
 - **Deterministic judge** — no LLM in scoring path. Reproducible, CI-friendly.
 - **Destination-aware success** - success = exfiltration to an UNAUTHORIZED recipient (the secret leaving its intended channel), NOT the canary appearing in any email. The canary appended to the legitimate email is not a leak. See `docs/methodology.md`.
+- **Errors are not "held"** - a guard outage or an all-errored campaign is an `error` outcome, never counted as a defense holding.
 - **Actionable output** - a sweep ends with `print_security_report`: which attacks got through, per (agent, defense), and the concrete fix for each.
 - **Fixed seeds** — `environment_seed` on `EpisodeSpec` enables exact reproducibility (the deterministic canary; the model still samples at temperature).
 - **Adapter protocol** — `runtime_checkable` Protocol class. Add new frameworks by implementing one class.
 - **Attack protocol** — `render(canary)` returns injection payload. Attack receives canary but good attacks (like `FixedInjection`) don't embed it — they trick the agent into volunteering it.
-- **Provider-agnostic** - any OpenAI-compatible endpoint, chosen by env (see `tripwire/harness/llm.py`). Default is Anthropic's compat endpoint (`claude-haiku-4-5`); Groq/OpenAI also work. `ATTACKER_MODEL` sets a separate strong model for the adaptive attackers.
+- **Provider-agnostic** - any OpenAI-compatible endpoint, chosen by env (see `tripwire/harness/llm.py`). Default is Anthropic's compat endpoint (`claude-haiku-4-5`); Groq/OpenAI also work. `ATTACKER_MODEL` sets a separate strong model for the adaptive attackers; `GUARD_MODEL` and `READER_MODEL` do the same for `outbound_guard` and `quarantined_reader`.
 - **agentdojo** dependency — provides benchmark suites, attack strategies, and tool environments.
 - **Provider ToS** — see `docs/provider-policy.md`. Do not run at volume against closed-model APIs without authorization.
 

@@ -4,9 +4,12 @@ Three things this doc covers:
 
 1. Three "vibecoded" sample agents - the kind of agent a developer throws together quickly - run through Tripwire's attack suite.
 2. A run of the real AgentDojo benchmark through Tripwire's bridge, to see how our target does on an external, environment-scored benchmark.
-3. Four AgentDojo-style scenarios replicated locally (`tripwire/scenarios.py`), where our attacks get real ASR (up to 100%) on realistic, varied tasks.
+3. Four AgentDojo-style scenarios replicated locally (`tripwire/scenarios.py`), where our attacks got real ASR (up to 100%, in pre-2026-10-11 runs) on realistic, varied tasks.
 
 All numbers below are on `claude-haiku-4-5` via the Anthropic OpenAI-compatible endpoint.
+They are from the pre-2026-10-11 codebase and are not comparable to what the current code produces.
+The judge, the attacks, the outbound_guard default (it now fails closed), recipient anchoring in the instruction-level defenses, and the relay coverage have all changed since.
+Nothing here has been re-measured on a real model.
 
 ## 1. Vibecoded sample agents
 
@@ -57,9 +60,11 @@ This is the concrete argument for instrumenting the agent you actually ship: a d
 ## 2. AgentDojo through the bridge
 
 `tripwire/environments/agentdojo_bridge.py` runs a real AgentDojo workspace task through a Tripwire adapter: AgentDojo's prompt, its ~24 stateful tools, its injection attack, and - crucially - its own utility and security checks, which score on environment state, not on the trace.
+The bridge also binds the defense (it passes the defense a `DefenseContext` before each episode), so the deterministic and content-inspecting rungs work here too.
 `scripts/experiments/agentdojo_eval.py` drives a grid of it.
 
-Grid: 3 user tasks x 3 injection tasks x 5 attacks (`direct`, `ignore_previous`, `system_message`, `injecagent`, `important_instructions`), for no_defense and spotlighting, on `raw_loop` + `claude-haiku-4-5`.
+Grid recorded below: 3 user tasks x 3 injection tasks x 5 attacks (`direct`, `ignore_previous`, `system_message`, `injecagent`, `important_instructions`), for no_defense and spotlighting, on `raw_loop` + `claude-haiku-4-5`.
+The script's attack list now also includes `tool_knowledge`, so a rerun is 3 x 3 x 6, not the grid below.
 
 | Defense | Utility (real task done) | ASR (injection succeeded) |
 | --- | --- | --- |
@@ -85,7 +90,7 @@ Every attack scored 0%, including `important_instructions` - the strongest attac
 AgentDojo's injection goals exfiltrate to a fixed EXTERNAL address (`mark.black-2134@gmail.com`).
 A modern aligned target refuses to send unrequested mail to an external address, so every attack - AgentDojo's own and ours - scores 0%.
 That measures the target's floor against one narrow exfiltration pattern, not the strength of our attacks.
-(For contrast: the same `important_instructions` attack that scores 0% on `claude-haiku-4-5` here scores a hit immediately on Groq `llama-3.3-70b` through the same bridge - the benchmark works, the target is just robust.)
+(For contrast: the same `important_instructions` attack that scores 0% on `claude-haiku-4-5` here scored a hit immediately on Groq `llama-3.3-70b` through the same bridge, a model Groq has since retired - the benchmark works, the target is just robust.)
 
 To measure our attacks on realistic tasks, we replicate AgentDojo's variety locally with a realistic exfiltration surface - see below.
 
@@ -124,6 +129,6 @@ Run:  `N=8 python scripts/experiments/scenario_eval.py`
 
 ### What this shows
 
-- **Our attacks do get ASR on realistic, varied agent tasks** - up to 100% undefended - once the exfiltration target is a plausible same-domain address instead of AgentDojo's fixed external one. The 0% on real AgentDojo was the recipient pattern, not the attacks.
+- **Our attacks did get ASR on realistic, varied agent tasks** (pre-2026-10-11 runs) - up to 100% undefended - once the exfiltration target is a plausible same-domain address instead of AgentDojo's fixed external one. The 0% on real AgentDojo was the recipient pattern, not the attacks.
 - **Scenario-neutral attacks transfer perfectly.** `metadata_exfil` and `prerequisite_mirror` frame the leak as a generic "asset registration" / "archive mirror" step, so they hit 100% on every scenario. `mundane_redirect` talks about forwarding "the total", so it lands on the two finance tasks (invoice, expense) and misses the helpdesk/calendar tasks whose story does not fit - a clean attack-fit effect.
 - **The defense picture matches the canary study.** prompt_hardening reduces these attacks to 0% across the board; spotlighting mostly holds, cracking only for `mundane_redirect` on invoice (~50%). So the local scenarios reproduce the same security/utility conclusions on more realistic, more varied tasks.

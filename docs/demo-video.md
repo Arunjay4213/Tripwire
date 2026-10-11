@@ -23,14 +23,14 @@ If a cut of the video does not land all three, it is not done.
 
 ## Terminal setup (do this before recording)
 
-- Fresh shell, empty scrollback, `clear` before every take.[demo-video.md](demo-video.md)
+- Fresh shell, empty scrollback, `clear` before every take.
 - Font size 16-20pt so the ASR table is readable at 1080p; the table is the money shot.
 - A neutral dark theme with good contrast; disable transparency.
 - Window sized so the ASR table does not wrap. Test with a dry run first; roughly 110+ columns.
-- Hide anything personal: prompt should be short (`$ ` or `~/demo $`), no hostname, no username.[demo-video.md](demo-video.md)
+- Hide anything personal: prompt should be short (`$ ` or `~/demo $`), no hostname, no username.
 - **Never show the API key.** Put it in `.env` beforehand; do not `cat .env` or `export` it on camera.
 - Rehearse the exact command sequence at least once off camera so you know the timing and the real output.
-- Runs hit a live model, so output varies slightly between takes; that is fine, but re-record if the smoke run happens to not leak (rare, since the config leads with a strong attack).
+- Runs hit a live model, so output varies slightly between takes; that is fine, but re-record if the smoke run happens to not leak (possible, since a model can resist even the strong lead attack).
 
 ## Prep
 
@@ -70,6 +70,7 @@ Pause on the `tripwire init` output: it prints the next command to run, which is
 Then show the generated `threat_model.yaml` in an editor for 5 seconds to make the point that the threat model is plain YAML: models, scenarios, attacks, defenses.
 `tripwire init` now writes `claude-haiku-4-5` as the starter model, so with `ANTHROPIC_API_KEY` set this runs as-is - no model edit needed.
 If you point at a different provider, set `models:` to an id it serves and export the matching key (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, or `GROQ_API_KEY`); the sweep sends exactly what the config says, so a mismatched id 404s.
+The shipped example configs name `openai/gpt-oss-20b` for Groq, because Groq retired `llama-3.3-70b-versatile`.
 
 Narration:
 
@@ -82,13 +83,16 @@ $ tripwire --config threat_model.yaml --smoke
 ```
 
 This is the core scene.
-`--smoke` runs one seed with the first attack, and the shipped config leads with a strong attack, so this run should show a leak.
+`--smoke` runs one seed with the first model, scenario, attack and defense, and the starter config leads with `metadata_exfil` under no defense (`null`), so the undefended run is the one most likely to show a leak.
+Nothing is guaranteed: a live model may resist, so rehearse and keep a take where the judge reports a leak.
 Let the run play in real time if it is under ~30 seconds; otherwise speed up the middle and slow back down for the output.
 
 Hold on two things, in order:
 
-1. The ASR table row showing `leak` and a nonzero ASR.
+1. The ASR table row showing a nonzero `leak` count and ASR.
+   The table columns are adapter, model, scenario, attack, defense, n, leak, ASR, 95% CI, utility, err, max_turns.
 2. The `SECURITY FEEDBACK` section: what the attack does in plain English, and the concrete fix line.
+   Its closing arrows lead with the deterministic rungs (for example `recipient_allowlist`, `secret_egress_scan`, `taint_tracking`), then the instruction-level ones.
 
 Narration:
 
@@ -97,14 +101,17 @@ Narration:
 
 ### Scene 4 - the fix (1:20-2:00)
 
-Open `threat_model.yaml` and delete the `- null` line from the defenses list on camera.
-`--smoke` runs only the first defense, so this one-line deletion switches the run from undefended to `prompt_hardening`:
+Open `threat_model.yaml` and move `recipient_allowlist` to the top of the defenses list on camera, in place of `- null`.
+`--smoke` runs only the first defense, so this edit switches the run from undefended to the deterministic rung the report recommends first:
 
 ```yaml
 defenses:
-  - prompt_hardening   # was: - null first, meaning no defense
+  - recipient_allowlist   # was: - null first, meaning no defense
+  - prompt_hardening
   - spotlighting
 ```
+
+`recipient_allowlist` is a deterministic check with no model call: a `send_email` to an address the user's message never named does not run.
 
 Re-run:
 
@@ -112,7 +119,8 @@ Re-run:
 $ tripwire --config threat_model.yaml --smoke
 ```
 
-Hold on the ASR dropping to 0% for the defended row.
+Hold on the defended row: the leak count should drop (the shape to show is a lower or zero ASR with the `utility` column still reported).
+Do not promise a zero in the narration unless the take actually shows one.
 
 Narration:
 
@@ -150,6 +158,7 @@ These keep the demo trustworthy, which is the whole brand of the tool:
 
 - Every terminal output shown must be a real run, not a mockup or doctored text.
 - If a take is sped up, it should look sped up (or carry a small "4x" label); do not silently compress a 5-minute sweep into 10 seconds as if it were instant.
+- Do not quote numbers from older docs or past sweeps on screen: the judge, attacks, guard default and relay coverage have changed, so only numbers from your own fresh run count.
 - Do not cherry-pick a lucky run for the defended re-run; if a defense only reduces ASR rather than zeroing it, show that and say so.
 - The smoke run is one seed; if you quote a percentage out loud, say "in this run" rather than implying a large-n result.
 
