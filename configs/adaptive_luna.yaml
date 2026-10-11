@@ -1,0 +1,13 @@
+# First-pass baseline, adaptive attackers, model gpt-5.6-luna: PAIR only (TAP runs on the DeepSeek slice).
+# Run with ATTACKER_MODEL, GUARD_MODEL and READER_MODEL set to DeepSeek-V4-Pro (gpt-5.6-luna rejects a set temperature).
+# Save the discovered payloads with --save-replay-library, then replay them on seeds 0..29 with --replay-library.
+models: [gpt-5.6-luna]
+adapters: [raw_loop, multi_agent, langgraph]   # drop langgraph if change 3 is accepted (parity tests show it sends identical requests to raw_loop)
+scenarios: [invoice, helpdesk, calendar, expense]
+attacks: [iterative]
+defenses: [null, prompt_hardening, spotlighting, outbound_guard]   # the rungs where search matters; the deterministic rungs block by construction
+seeds: [100, 101, 102, 103, 104, 105, 106, 107, 108, 109]   # discovery seeds, disjoint from the single-shot 0..29 so replay is held out
+limits:
+  max_turns: 5
+  campaign_budget: 8
+  max_concurrency: 16

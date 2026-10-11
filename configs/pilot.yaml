@@ -1,0 +1,12 @@
+# Pilot before the first pass: every model x adapter x defense kind, the control, one static and one adaptive attack, two seeds.
+# Purpose: prove every cell runs on Azure and measure real seconds per episode to size the first pass. Not a result.
+models: [DeepSeek-V4-Pro, gpt-5.6-luna]
+adapters: [raw_loop, multi_agent, langgraph]
+scenarios: [invoice, helpdesk]
+attacks: [no_attack, metadata_exfil, iterative]
+defenses: [null, outbound_guard, quarantined_reader, spotlighting+recipient_allowlist]
+seeds: [0, 1]
+limits:
+  max_turns: 5
+  campaign_budget: 4
+  max_concurrency: 8
