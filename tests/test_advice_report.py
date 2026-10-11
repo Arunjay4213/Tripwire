@@ -43,18 +43,16 @@ def test_report_flags_leaked_attacks_with_fix(capsys):
 
 
 def test_defense_names_agree_across_registry_reporter_and_advice():
-    """reporter.print_security_report hard-codes the rungs it recommends and
-    every Advice.reduced_by names rungs; both must be real defense names, or
-    a renamed defense silently drops out of the "Start here" line."""
-    import inspect
-
+    """reporter.print_security_report recommends the rungs it lists and every
+    Advice.reduced_by names rungs; both must be real defense names, or a
+    renamed defense silently drops out of the "Start here" line. And every
+    rung advice names must be one the report knows how to recommend."""
     from tripwire.config.loader import _DEFENSE_REGISTRY, resolve_defenses
     from tripwire.harness import reporter
 
     registered = {d.name for d in resolve_defenses([*_DEFENSE_REGISTRY], [])}
     assert registered == set(_DEFENSE_REGISTRY)
-    source = inspect.getsource(reporter.print_security_report)
-    for name in ("prompt_hardening", "spotlighting", "outbound_guard"):
-        assert name in registered and name in source
+    recommendable = set(reporter._ENFORCING_RUNGS) | set(reporter._INSTRUCTION_RUNGS)
+    assert recommendable <= registered
     for attack in _ATTACK_REGISTRY:
-        assert set(advice_for(attack).reduced_by) <= registered | {"tool_filter"}, attack
+        assert set(advice_for(attack).reduced_by) <= recommendable, attack

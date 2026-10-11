@@ -61,9 +61,12 @@ def run(spec: EpisodeSpec) -> NormalizedTrace:
 
     steps: list[TraceStep] = []
     for _ in range(_MAX_ITERATIONS):
-        response = _client.chat.completions.create(
-            model=spec.model, messages=messages, tools=spec.tools,
-        )
+        # Omit `tools` when a defense (tool_filter) left none: most endpoints
+        # reject `tools=[]`.
+        kwargs = {"model": spec.model, "messages": messages}
+        if spec.tools:
+            kwargs["tools"] = spec.tools
+        response = _client.chat.completions.create(**kwargs)
         message = response.choices[0].message
 
         if not message.tool_calls:
@@ -80,14 +83,19 @@ def run(spec: EpisodeSpec) -> NormalizedTrace:
             # Defense enforcement is opt-in per adapter: check tool_call_guard
             # (if the active defense set one) before running the real tool.
             # Skipping this line still works -- it just means your agent
-            # can't be gated by a mid-loop defense like tool_filter.
+            # can't be gated by a mid-loop defense like tool_filter or
+            # recipient_allowlist.
+            allowed, guard_message = True, ""
             if spec.tool_call_guard is not None:
                 allowed, guard_message = spec.tool_call_guard(name, args)
-                result = guard_message if not allowed else _run_tool(spec, env, name, args)
-            else:
+            if allowed:
                 result = _run_tool(spec, env, name, args)
-
-            steps.append(TraceStep(step=len(steps), type="tool_result", name=name, content=result))
+                steps.append(TraceStep(step=len(steps), type="tool_result", name=name, content=result))
+            else:
+                # A denied call did NOT run: record it as tool_blocked, never
+                # tool_result, or the judge scores the attempt as a real leak.
+                result = guard_message
+                steps.append(TraceStep(step=len(steps), type="tool_blocked", name=name, content=result))
             messages.append({"role": "tool", "tool_call_id": call.id, "content": result})
 
     return NormalizedTrace(steps=steps, final_output="")
