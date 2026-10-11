@@ -17,6 +17,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
   It used to come back `ok` with `broke: false` and count as a defense win.
 - **The CrewAI adapter honors the shared per-episode budget** (`limits.max_turns`), records `stop_reason`, feeds a raising tool back as a `tool_result` like every other adapter, drops optional arguments the model never set (CrewAI forwards them as `None`), and uses a scenario-neutral role.
 
+### Fixed
+
+- **Provider response shapes are normalized once, for every adapter.**
+  Content sent as a list of text blocks is flattened to text (one adapter stored the list, another a Python repr); a refusal (`content: null`, text in `refusal`) becomes the model's output so the trace and the adaptive attackers see it; a tool call with no id (some endpoints omit it) gets one instead of crashing the LangGraph adapter.
+- **An implemented tool that is off the offered menu never runs.**
+  Every adapter built its tool map from the scenario's implementations rather than from `spec.tools`, so a model that free-formed a call to a tool `tool_filter` had removed could still execute it when no guard was wired; the menu is now the topology in raw_loop, langgraph and both relay agents.
+- PAIR's structured-reply parser took the span from the first `{` to the last `}`, so prose after the object that contained a brace made the whole reply, JSON wrapper included, the injected payload.
+- The adaptive attackers retried every error with sleeps; auth errors and unknown models now fail at once.
+- `wilson_ci` rejects `successes > n` instead of crashing the reporter; the guard's verdict parser treats a reply containing both verdicts as an error; a duplicate model, attack, adapter, scenario or defense in the config is rejected.
+
 ### Added
 
 - **End-to-end tests** (`tests/test_e2e.py`) that run the real CLI against an in-process OpenAI-compatible server with scripted agent policies (`tests/fake_provider.py`): config, sweep, adapters, SDK, defenses, judge, results file, tables, exit codes and the CI gate, with nothing stubbed inside the pipeline.

@@ -66,30 +66,74 @@ def has_invalid_args(args: dict[str, Any]) -> bool:
     return set(args) == {RAW_ARGS_KEY} and isinstance(args[RAW_ARGS_KEY], str)
 
 
+def message_text(content: Any) -> str:
+    """Plain text of a message's content: a string, None, or a list of
+    content blocks (``[{"type": "text", "text": ...}, ...]``), which some
+    OpenAI-compatible providers send. Never a Python repr of the list."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, str):
+                parts.append(part)
+            elif isinstance(part, dict) and isinstance(part.get("text"), str):
+                parts.append(part["text"])
+        return "".join(parts)
+    return "" if content is None else str(content)
+
+
+def assistant_text(message: Any) -> str:
+    """The text of an assistant turn: its content, or, for a refusal
+    (``content`` None and the text in ``message.refusal``), the refusal, so
+    the trace and the adaptive attackers see what the model actually said."""
+    return message_text(getattr(message, "content", None)) or message_text(getattr(message, "refusal", None))
+
+
 def assistant_message_to_dict(message: Any) -> dict[str, Any]:
     """Convert an OpenAI SDK ChatCompletionMessage into a plain OpenAI-format
     assistant dict, the form every adapter feeds back into the conversation.
 
-    Arguments are re-serialized from parse_tool_args, so the history always
-    carries a valid JSON object (some OpenAI-compatible endpoints reject a
-    request whose earlier tool call has malformed arguments). Malformed
-    arguments appear there as ``{"__raw__": "<what the model sent>"}``, so the
-    model still sees what it actually produced rather than a rewritten ``{}``.
+    Normalizes the shapes real providers send: content as a block list
+    becomes text, a refusal becomes the content, and a tool call with no id
+    (some endpoints omit it) gets one, since the tool message that answers it
+    must name it. Arguments are re-serialized from parse_tool_args, so the
+    history always carries a valid JSON object (some OpenAI-compatible
+    endpoints reject a request whose earlier tool call has malformed
+    arguments). Malformed arguments appear there as
+    ``{"__raw__": "<what the model sent>"}``, so the model still sees what it
+    actually produced rather than a rewritten ``{}``.
     """
-    message_dict: dict[str, Any] = {"role": "assistant", "content": message.content or ""}
+    message_dict: dict[str, Any] = {"role": "assistant", "content": assistant_text(message)}
     if message.tool_calls:
         message_dict["tool_calls"] = [
             {
-                "id": call.id,
+                "id": call.id or f"call_{index}",
                 "type": "function",
                 "function": {
                     "name": call.function.name,
                     "arguments": json.dumps(parse_tool_args(call.function.arguments)),
                 },
             }
-            for call in message.tool_calls
+            for index, call in enumerate(message.tool_calls)
         ]
     return message_dict
+
+
+def offered_tool_map(tools: list[Any] | None, impls: dict[str, Any]) -> dict[str, Any]:
+    """The tools an agent may actually run: the implementations of the tools
+    it was OFFERED. ``spec.tools`` is the menu; an implementation that exists
+    but was filtered off the menu (tool_filter removing send_email) must not
+    run just because the model free-forms a call to it."""
+    offered = {_tool_schema_name(t) for t in tools or []}
+    return {name: impl for name, impl in impls.items() if name in offered}
+
+
+def _tool_schema_name(tool: Any) -> str:
+    if isinstance(tool, dict):
+        function = tool.get("function", tool)
+        return str(function.get("name", ""))
+    return str(getattr(tool, "name", ""))
 
 
 @dataclass(frozen=True)

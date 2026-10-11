@@ -8,11 +8,13 @@ unknown tools and failing tools exactly like the LangGraph adapters.
 
 from __future__ import annotations
 
+import json
+
 from typing import Any
 
 from openai import OpenAI
 
-from ._common import assistant_message_to_dict, execute_tool_call, parse_tool_args
+from ._common import assistant_message_to_dict, execute_tool_call, offered_tool_map, parse_tool_args
 from .base import EpisodeSpec, NormalizedTrace, TraceStep
 
 
@@ -39,7 +41,9 @@ class RawLoopAdapter:
         stop_reason="max_turns" and final_output="".
         """
         env = spec.task
-        tool_map = env["tool_impls"]
+        # The menu is the topology: an implementation filtered off spec.tools
+        # (tool_filter removing send_email) must not run on a free-formed call.
+        tool_map = offered_tool_map(spec.tools, env["tool_impls"])
         messages: list[Any] = [
             {"role": "system", "content": env["system_prompt"]},
             {"role": "user", "content": env["user_message"]},
@@ -56,34 +60,35 @@ class RawLoopAdapter:
             if spec.tools:
                 kwargs["tools"] = spec.tools
             response = self._client.chat.completions.create(**kwargs)
-            msg = response.choices[0].message
+            # The normalized dict (block-list content flattened, a refusal as
+            # content, tool-call ids filled in) is what the trace records and
+            # what the model sees next turn, the same as the LangGraph adapters.
+            assistant = assistant_message_to_dict(response.choices[0].message)
+            text = assistant["content"]
 
-            if not msg.tool_calls:
+            if not assistant.get("tool_calls"):
                 # Model gave a final text answer
-                final = msg.content or ""
-                steps.append(TraceStep(step=len(steps), type="model_output", content=final))
-                return NormalizedTrace(steps=steps, final_output=final, stop_reason="done")
+                steps.append(TraceStep(step=len(steps), type="model_output", content=text))
+                return NormalizedTrace(steps=steps, final_output=text, stop_reason="done")
 
             # Text the model wrote alongside its tool calls is still model
             # output (it may carry the canary); keep it in the trace.
-            if msg.content:
-                steps.append(TraceStep(step=len(steps), type="model_output", content=msg.content))
+            if text:
+                steps.append(TraceStep(step=len(steps), type="model_output", content=text))
 
             # Record the assistant message so the model sees its own request.
-            # A plain dict (not the SDK object) so the request body matches
-            # the LangGraph adapters and malformed args are sanitized.
-            messages.append(assistant_message_to_dict(msg))
+            messages.append(assistant)
 
             # Record every requested call first, then each outcome in order:
             # the same step order the LangGraph adapters produce (one
             # assistant message holding all calls, then one tool message per
             # call), so parallel tool calls yield identical traces.
-            parsed = [(call, parse_tool_args(call.function.arguments)) for call in msg.tool_calls]
+            parsed = [(call, json.loads(call["function"]["arguments"])) for call in assistant["tool_calls"]]
             for call, args in parsed:
-                steps.append(TraceStep(step=len(steps), type="tool_call", name=call.function.name, args=args))
+                steps.append(TraceStep(step=len(steps), type="tool_call", name=call["function"]["name"], args=args))
 
             for call, args in parsed:
-                name = call.function.name
+                name = call["function"]["name"]
                 # The shared policy re-checks availability and the defense's
                 # tool_call_guard right before executing: a model can free-form
                 # a call for a tool that was filtered out of spec.tools.
@@ -103,7 +108,7 @@ class RawLoopAdapter:
 
                 messages.append({
                     "role": "tool",
-                    "tool_call_id": call.id,
+                    "tool_call_id": call["id"],
                     "content": outcome.content,
                 })
 

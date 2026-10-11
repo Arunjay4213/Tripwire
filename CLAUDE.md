@@ -14,7 +14,9 @@ Tripwire is an evaluation harness that measures AI agent vulnerability to prompt
 # Install for development (editable, with test + optional extras)
 pip install -e ".[dev]"        # or: uv pip install -e ".[dev]"
 
-# Run all tests (734 tests, fully offline, ~5s)
+# Run all tests (~640 tests, fully offline, ~6s). tests/test_e2e.py runs the real
+# CLI against an in-process fake provider (tests/fake_provider.py); tests/test_live.py
+# runs a real smoke sweep only with TRIPWIRE_LIVE=1 and a provider key.
 python -m pytest tests/ -q
 
 # Run a single test file / test
@@ -72,5 +74,5 @@ Published on PyPI as `tripwire-eval` (the import package and CLI stay `tripwire`
 
 - Type hints throughout, `from __future__ import annotations` in all modules.
 - Dataclasses for data flow (`EpisodeSpec`, `NormalizedTrace`, `TraceStep`, `EpisodeResult`). No mutable defaults; use `field(default_factory=...)`.
-- Tests use hand-built `NormalizedTrace` objects — no mocking, no LLM calls.
+- Tests use hand-built `NormalizedTrace` objects or `tests/scripted_client.py` (the one fake OpenAI client); no MagicMock, no LLM calls. End-to-end tests go through `tests/fake_provider.py`.
 - When pairing, add to existing files rather than creating parallel solution files.

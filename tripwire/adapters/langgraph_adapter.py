@@ -24,6 +24,7 @@ from ._langgraph_shared import (
     execute_tool_call,
     messages_to_trace_steps,
     openai_message_to_dict,
+    offered_tool_map,
 )
 from .base import EpisodeSpec, NormalizedTrace, StopReason
 
@@ -127,7 +128,9 @@ class LangGraphAdapter:
             {"role": "user", "content": env["user_message"]},
         ]
         tools_json = spec.tools
-        tool_map = env["tool_impls"]
+        # The menu is the topology: a tool with an implementation that a
+        # defense filtered off spec.tools is "not available", never run.
+        tool_map = offered_tool_map(tools_json, env["tool_impls"])
 
         # Step 2: build the graph
         def call_model(state):

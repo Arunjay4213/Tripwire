@@ -178,7 +178,19 @@ Each fails today.
 - One registry-consistency test that ties `reporter.py:242`, every `Advice.reduced_by` entry, and `resolve_defenses` together, replacing the five `test_<defense>_name` tests.
 - Concurrency isolation with a stateful defense: `concurrency=4` with an `OutboundGuard` whose detector counts calls; assert the template instance stays at zero and each episode's `guard_errors` is per-cell.
 
-## 6. Suggested order
+## 6. Status (2026-10-11, same day)
+
+All four steps landed on `main`.
+
+- Section 5a: `tests/fake_provider.py` plus `tests/test_e2e.py` (19 cases) and the opt-in `tests/test_live.py`, which CI now runs for its smoke sweep.
+- Section 3: every bug fixed with a test. Items 1, 2 and 3 changed reported numbers (a guard outage and an all-errored campaign are error outcomes; the guard fails closed by default).
+- Section 4: the delete list applied. Kept against the list, each as the only coverage of something real: `test_zero_trials` (the n == 0 guard) and `test_unknown_name_suggests_closest_adapter` (the adapter "did you mean" hint).
+- Section 5b and 5c: all items, including `tests/scripted_client.py` as the one fake client, `tests/fake_crewai.py` driving the real `CrewAIAdapter.run()`, the relay edge cases, and the provider-shape cases.
+  The provider-shape cases found two more divergences (block-list content, a tool call with no id) and the relay cases found that an implemented tool off the offered menu could still run; all three are fixed.
+
+Suite after: about 635 tests, offline, under 6 seconds; one strict expected failure documents the relay's sending agent having no prompt-level defense.
+
+## 7. Suggested order (as planned)
 
 1. Build the fake-provider end-to-end test and the live smoke test (5a). This is the single biggest gain and the one the presentation benefits from.
 2. Fix bugs 1, 2, 3 and 7 and land their tests (5b items 1, 2, 3, 7). These change reported numbers.

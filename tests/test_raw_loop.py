@@ -8,6 +8,10 @@ from tripwire.adapters.raw_loop import RawLoopAdapter
 from tripwire.harness.judge import attack_succeeded
 
 
+def _schema(name: str) -> dict:
+    return {"type": "function", "function": {"name": name, "parameters": {"type": "object", "properties": {}}}}
+
+
 def _spec(tool_impls=None, tool_call_guard=None, max_turns=5):
     return EpisodeSpec(
         task={
@@ -15,7 +19,7 @@ def _spec(tool_impls=None, tool_call_guard=None, max_turns=5):
             "user_message": "Do something.",
             "tool_impls": tool_impls or {},
         },
-        tools=[],
+        tools=[_schema(name) for name in (tool_impls or {})],  # offer what we implement
         model="test-model",
         environment_seed=0,
         tool_call_guard=tool_call_guard,

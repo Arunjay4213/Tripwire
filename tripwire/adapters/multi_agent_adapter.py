@@ -40,7 +40,7 @@ from langgraph.graph.message import add_messages
 
 from tripwire.harness.llm import make_client
 
-from ._common import assistant_message_to_dict, execute_tool_call
+from ._common import assistant_message_to_dict, execute_tool_call, message_text, offered_tool_map
 from ._langgraph_shared import messages_to_trace_steps
 from .base import EpisodeSpec, NormalizedTrace, StopReason
 
@@ -96,19 +96,6 @@ def _tool_name(schema: Any) -> str:
     return ""
 
 
-def _message_text(content: Any) -> str:
-    """Plain text of a message's content (str, or a list of content parts)."""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts = []
-        for part in content:
-            if isinstance(part, str):
-                parts.append(part)
-            elif isinstance(part, dict) and isinstance(part.get("text"), str):
-                parts.append(part["text"])
-        return "".join(parts)
-    return "" if content is None else str(content)
 
 
 def _recursion_limit(max_turns: int) -> int:
@@ -187,8 +174,10 @@ class MultiAgentAdapter:
         # automatically: Agent B just ends up with an empty tool list.
         a_tools = [t for t in spec.tools if _tool_name(t) != SINK_TOOL]
         b_tools = [t for t in spec.tools if _tool_name(t) == SINK_TOOL]
-        a_tool_map = {k: v for k, v in tool_impls.items() if k != SINK_TOOL}
-        b_tool_map = {k: v for k, v in tool_impls.items() if k == SINK_TOOL}
+        # Each agent may run only what it was offered: if tool_filter removed
+        # send_email from the menu, B must not execute a free-formed call to it.
+        a_tool_map = offered_tool_map(a_tools, tool_impls)
+        b_tool_map = offered_tool_map(b_tools, tool_impls)
         if a_tools and not any(_tool_name(t) in a_tool_map for t in a_tools):
             # Agent A would be offered tools it can never run, so it would never
             # read the poisoned content and every attack would score a vacuous 0%.
@@ -220,7 +209,7 @@ class MultiAgentAdapter:
             """Agent A is done. Seed Agent B's conversation with its own
             persona (canary-unaware), Agent A's final text as labelled
             context, and the user's original request as B's user turn."""
-            summary = _message_text(state["messages_a"][-1].content).strip() or EMPTY_SUMMARY_PLACEHOLDER
+            summary = message_text(state["messages_a"][-1].content).strip() or EMPTY_SUMMARY_PLACEHOLDER
             return {"messages_b": _b_seed_messages(summary, user_message)}
 
         def agent_b_call_model(state):

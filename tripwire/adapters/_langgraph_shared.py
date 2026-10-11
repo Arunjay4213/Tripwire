@@ -19,6 +19,8 @@ from ._common import (
     ToolOutcome,
     assistant_message_to_dict,
     execute_tool_call,
+    message_text,
+    offered_tool_map,
     parse_tool_args,
 )
 from .base import StepType, TraceStep
@@ -30,7 +32,9 @@ __all__ = [
     "ToolOutcome",
     "assistant_message_to_dict",
     "execute_tool_call",
+    "message_text",
     "messages_to_trace_steps",
+    "offered_tool_map",
     "openai_message_to_dict",
     "parse_tool_args",
 ]
@@ -53,7 +57,7 @@ def messages_to_trace_steps(messages: list[Any], step_offset: int = 0) -> tuple[
             if msg.tool_calls:
                 # Text the model wrote alongside its tool calls is still model
                 # output (it may carry the canary); keep it, as raw_loop does.
-                text = msg.content if isinstance(msg.content, str) else str(msg.content)
+                text = message_text(msg.content)
                 if text:
                     steps.append(TraceStep(step=step_offset + len(steps), type="model_output", content=text))
                 for call in msg.tool_calls:
@@ -64,11 +68,11 @@ def messages_to_trace_steps(messages: list[Any], step_offset: int = 0) -> tuple[
                         args=call["args"],
                     ))
             else:
-                content = msg.content if isinstance(msg.content, str) else str(msg.content)
+                content = message_text(msg.content)
                 final_output = content
                 steps.append(TraceStep(step=step_offset + len(steps), type="model_output", content=content))
         elif msg.type == "tool":
-            content = msg.content if isinstance(msg.content, str) else str(msg.content)
+            content = message_text(msg.content)
             # status="error" is how _run_tools marks a call that did not run
             # (guard denial, unknown tool, invalid arguments; see
             # langgraph_adapter.py) -- the judge must not score a blocked
