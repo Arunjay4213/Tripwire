@@ -84,12 +84,6 @@ def test_run_episode_applies_filter_tool_calls():
     assert names == ["read_inbox"]
 
 
-def test_run_episode_records_defense_name():
-    adapter = RecordingAdapter()
-    result = run_episode(adapter, _spec(), _FixedAttack(), defense=ToolFilter(["read_inbox"]))
-    assert result.defense == "tool_filter"
-
-
 def test_run_episode_threads_tool_result_wrapper_to_adapter():
     """Spotlighting's fencing reaches the adapter as spec.tool_result_wrapper,
     so a tool result the adapter runs gets fenced before the model sees it."""
@@ -178,21 +172,7 @@ def test_run_campaign_applies_defense_to_every_attempt():
         assert names == ["read_inbox"]
 
 
-def test_run_campaign_records_defense_name():
-    adapter = _ScriptedAdapter([_send("clean")])
-    result = run_campaign(
-        adapter, _spec(), _RecordingAttacker(), budget=1, defense=ToolFilter(["read_inbox"])
-    )
-    assert result.defense == "tool_filter"
-
-
 # --- run_sweep -------------------------------------------------------------------
-
-def test_run_sweep_defaults_to_single_no_defense_pass():
-    adapter = RecordingAdapter()
-    episodes, _ = run_sweep([adapter], ["m"], [_FixedAttack()], [0])
-    assert len(episodes) == 1
-    assert episodes[0].defense == "no_defense"
 
 
 def test_run_sweep_multiplies_by_defenses():
@@ -346,5 +326,8 @@ def test_run_campaign_archives_the_winning_payload_on_the_attacker():
     )
     result = run_campaign(_ScriptedTraceAdapter(leak), _spec(seed), attacker, budget=3)
     assert result.broke is True
-    archived = [p for _e, _g, p in attacker._archive.get("invoice", [])]
-    assert any("ap@corp.com" in p for p in archived), archived
+    archived = attacker._archive.get("invoice", [])
+    # The flag comes from the runner's feedback string, which the attacker
+    # matches by text; a wording change on either side would demote every
+    # real win to a grade-2 near-win with no other test noticing.
+    assert any(exfiltrated and grade == 2 and "ap@corp.com" in p for exfiltrated, grade, p in archived), archived

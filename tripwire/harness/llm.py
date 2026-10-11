@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import os
 
+import openai
 from openai import OpenAI
 
 
@@ -73,6 +74,23 @@ def has_provider_key() -> bool:
 def provider_key_names() -> list[str]:
     """The env-var names the harness looks for, for error messages."""
     return [p.key_env for p in _PROVIDERS]
+
+
+# Provider errors worth retrying: the same request can succeed a moment later.
+# Anything else (auth, a model the provider does not serve, a malformed
+# request, a bug) is deterministic, so a retry only wastes time -- or, for an
+# attacker, sleeps through its whole retry budget on an error that cannot clear.
+TRANSIENT_ERRORS: tuple[type[BaseException], ...] = (
+    openai.RateLimitError,
+    openai.APIConnectionError,   # includes APITimeoutError
+    openai.APITimeoutError,
+    openai.InternalServerError,
+)
+
+
+def is_transient(exc: BaseException) -> bool:
+    """True for provider errors a retry can fix (rate limit, network, 5xx)."""
+    return isinstance(exc, TRANSIENT_ERRORS)
 
 
 def make_client() -> OpenAI:

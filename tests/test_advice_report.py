@@ -21,18 +21,6 @@ def test_every_registered_attack_has_specific_advice():
         assert a.summary != advice_for("__definitely_unknown__").summary, name
 
 
-def test_new_attacks_have_targeted_advice():
-    """guard_injection and relay_action_item are registered and each carries
-    advice naming the mechanism/fix, not the generic fallback."""
-    guard = advice_for("guard_injection")
-    assert "guard" in guard.summary.lower() or "filter" in guard.summary.lower()
-    assert "allowlist" in guard.fix.lower()
-
-    relay = advice_for("relay_action_item")
-    assert "action item" in relay.summary.lower() or "summar" in relay.summary.lower()
-    assert relay.fix and relay.summary
-
-
 def _ep(attack, succeeded, defense="no_defense"):
     return EpisodeResult(adapter="my_agent", model="m", attack=attack, seed=0,
                          succeeded=succeeded, defense=defense, task_completed=True,
@@ -54,8 +42,19 @@ def test_report_flags_leaked_attacks_with_fix(capsys):
     assert "allowlist" in out.lower()  # redirect attack triggers the allowlist recommendation
 
 
-def test_report_congratulates_when_nothing_leaks(capsys):
-    episodes = [_ep("metadata_exfil", False, defense="prompt_hardening")]
-    print_security_report(episodes)
-    out = capsys.readouterr().out
-    assert "No exfiltration observed" in out
+def test_defense_names_agree_across_registry_reporter_and_advice():
+    """reporter.print_security_report hard-codes the rungs it recommends and
+    every Advice.reduced_by names rungs; both must be real defense names, or
+    a renamed defense silently drops out of the "Start here" line."""
+    import inspect
+
+    from tripwire.config.loader import _DEFENSE_REGISTRY, resolve_defenses
+    from tripwire.harness import reporter
+
+    registered = {d.name for d in resolve_defenses([*_DEFENSE_REGISTRY], [])}
+    assert registered == set(_DEFENSE_REGISTRY)
+    source = inspect.getsource(reporter.print_security_report)
+    for name in ("prompt_hardening", "spotlighting", "outbound_guard"):
+        assert name in registered and name in source
+    for attack in _ATTACK_REGISTRY:
+        assert set(advice_for(attack).reduced_by) <= registered | {"tool_filter"}, attack

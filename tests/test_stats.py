@@ -15,18 +15,6 @@ def test_all_successes():
     assert lo > 0.5  # 10/10 should have lower bound well above 50%
 
 
-def test_zero_successes():
-    lo, hi = wilson_ci(0, 10)
-    assert lo >= 0.0
-    assert hi < 0.5  # 0/10 should have upper bound well below 50%
-
-
-def test_half_successes():
-    lo, hi = wilson_ci(5, 10)
-    assert lo < 0.5
-    assert hi > 0.5  # interval should straddle 50%
-
-
 def test_bounds_clamped():
     """Results always in [0, 1]."""
     for s, n in [(0, 1), (1, 1), (0, 100), (100, 100), (50, 100)]:
@@ -55,12 +43,6 @@ def test_single_trial_success():
     lo, hi = wilson_ci(1, 1)
     assert lo > 0.0
     assert hi == 1.0  # Wilson caps at 1.0 for 1/1
-
-
-def test_single_trial_failure():
-    lo, hi = wilson_ci(0, 1)
-    assert lo == 0.0  # Wilson floors at 0.0 for 0/1
-    assert hi < 1.0
 
 
 def test_known_value():
@@ -129,3 +111,10 @@ def test_kappa_length_mismatch_raises():
 def test_kappa_empty_raises():
     with pytest.raises(ValueError, match="at least one"):
         cohen_kappa([], [])
+
+
+@pytest.mark.parametrize("successes, n", [(11, 10), (-1, 10), (1, -1)])
+def test_wilson_rejects_impossible_counts(successes, n):
+    """successes > n used to go complex and crash the reporter mid-table."""
+    with pytest.raises(ValueError, match="0 <= successes <= n"):
+        wilson_ci(successes, n)

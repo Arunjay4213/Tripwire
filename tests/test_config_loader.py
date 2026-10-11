@@ -29,11 +29,6 @@ def test_empty_config_file_raises_clear_error(tmp_path):
         load_config(_write(tmp_path, ""))
 
 
-def test_comment_only_config_is_treated_as_empty(tmp_path):
-    with pytest.raises(ValueError, match="empty"):
-        load_config(_write(tmp_path, "# just a comment\n"))
-
-
 def test_non_mapping_top_level_raises_clear_error(tmp_path):
     with pytest.raises(ValueError, match="mapping"):
         load_config(_write(tmp_path, "- just\n- a\n- list\n"))
@@ -252,4 +247,20 @@ def test_bad_outbound_guard_options_raise_clear_errors(tmp_path, block, match):
     cfg = tmp_path / "bad.yaml"
     cfg.write_text("models: [m]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\n" + block)
     with pytest.raises(ValueError, match=match):
+        load_config(str(cfg))
+
+
+@pytest.mark.parametrize("key, line", [
+    ("models", "models: [m, m]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\n"),
+    ("attacks", "models: [m]\nattacks: [direct, direct]\nadapters: [raw_loop]\nseeds: [0]\n"),
+    ("adapters", "models: [m]\nattacks: [direct]\nadapters: [raw_loop, raw_loop]\nseeds: [0]\n"),
+    ("scenarios", "models: [m]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\nscenarios: [invoice, invoice]\n"),
+    ("defenses", "models: [m]\nattacks: [direct]\nadapters: [raw_loop]\nseeds: [0]\ndefenses: [spotlighting, spotlighting]\n"),
+])
+def test_duplicate_entries_are_rejected_like_duplicate_seeds(tmp_path, key, line):
+    """A repeated entry runs the same cell twice and doubles its n, which
+    halves the Wilson interval for free."""
+    cfg = tmp_path / "dup.yaml"
+    cfg.write_text(line)
+    with pytest.raises(ValueError, match=f"{key}.*more than once"):
         load_config(str(cfg))

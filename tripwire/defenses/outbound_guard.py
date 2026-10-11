@@ -114,14 +114,13 @@ def parse_verdict(reply: str | None) -> bool:
     """Parse the detector's one-word reply. True = BLOCK, False = ALLOW.
 
     Tolerates markdown and punctuation around the word ("**BLOCK**", "`ALLOW`",
-    '"BLOCK."') and a short label ("Verdict: BLOCK"). The first word wins when
-    it is a verdict; otherwise the reply must contain exactly one kind of
-    verdict word. An empty or ambiguous reply raises GuardError: it is a failed
-    check, not an ALLOW.
+    '"BLOCK."') and a short label ("Verdict: BLOCK"). The reply must contain
+    exactly one kind of verdict word: a model that reasons its way from one
+    verdict to the other ("ALLOW. Actually, BLOCK.") is ambiguous, and an
+    empty or ambiguous reply raises GuardError. That is a failed check, not an
+    ALLOW (and under fail-closed, a block).
     """
     words = re.sub(r"[^A-Z]+", " ", (reply or "").upper()).split()
-    if words and words[0] in _VERDICT_WORDS:
-        return _VERDICT_WORDS[words[0]]
     found = {_VERDICT_WORDS[w] for w in words if w in _VERDICT_WORDS}
     if len(found) == 1:
         return found.pop()

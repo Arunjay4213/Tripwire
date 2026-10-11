@@ -23,6 +23,7 @@ from tripwire.attacks.iterative import IterativeAttacker
 from tripwire.attacks.tree_attacker import TreeAttacker
 from tripwire.defenses.base import Defense, NoDefense
 from tripwire.harness.canary import make_canary
+from tripwire.harness.llm import TRANSIENT_ERRORS, is_transient
 from tripwire.harness.judge import (  # noqa: F401 -- BENIGN_* re-exported for scripts/experiments
     BENIGN_RECIPIENT,
     BENIGN_TASK_EMAIL_BODY,
@@ -117,17 +118,10 @@ _MAX_EPISODE_RETRIES = 2
 # in a user's --agent file, ...) is deterministic or correlated with what the
 # model did, so re-running would either fail again or bias the sample toward
 # the runs that happened not to crash.
-_TRANSIENT_ERRORS: tuple[type[BaseException], ...] = (
-    openai.RateLimitError,
-    openai.APIConnectionError,   # includes APITimeoutError
-    openai.APITimeoutError,
-    openai.InternalServerError,
-)
-
-
-def _is_transient(exc: BaseException) -> bool:
-    """True for provider errors a retry can fix (rate limit, network, 5xx)."""
-    return isinstance(exc, _TRANSIENT_ERRORS)
+# The classification itself lives in harness.llm (next to the provider) so
+# the adaptive attackers apply the same rule to their own calls.
+_TRANSIENT_ERRORS = TRANSIENT_ERRORS
+_is_transient = is_transient
 
 
 def _retry_transient(fn: Callable[[], T]) -> T:

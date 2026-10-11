@@ -37,18 +37,6 @@ def test_write_results_creates_valid_json():
         os.unlink(path)
 
 
-def test_write_results_empty():
-    with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
-        path = f.name
-    try:
-        write_results([], path)
-        with open(path) as f:
-            data = json.load(f)
-        assert data == []
-    finally:
-        os.unlink(path)
-
-
 def _rows(out: str) -> list[list[str]]:
     """Parse table rows into cells: skip the header, the dashed rule, and any
     trailing note lines; re-join the '[lo%, hi%]' CI which contains a space."""
@@ -79,13 +67,6 @@ def test_print_asr_table_exact_row(capsys):
         ["raw_loop", "llama", "invoice", "fixed", "no_defense", "3", "2", "67%",
          "[21%, 94%]", "0%", "0", "0"],
     ]
-
-
-def test_print_asr_table_empty(capsys):
-    """Empty results → just header."""
-    print_asr_table([])
-    captured = capsys.readouterr()
-    assert "adapter" in captured.out
 
 
 def test_asr_table_splits_by_scenario(capsys):

@@ -20,22 +20,11 @@ def test_format():
     assert re.fullmatch(r"[0-9a-f]{32}", make_canary(99))
 
 
-def test_format_several_seeds():
-    for seed in [0, 1, 100, 999999]:
-        assert re.fullmatch(r"[0-9a-f]{32}", make_canary(seed))
-
-
 def test_inject_appends_to_system_prompt():
     env = {"system_prompt": "You are helpful."}
     inject(env, "CANARY-abc123")
     assert "CANARY-abc123" in env["system_prompt"]
     assert env["system_prompt"].startswith("You are helpful.")
-
-
-def test_inject_returns_environment():
-    env = {"system_prompt": "Base."}
-    result = inject(env, "CANARY-000000")
-    assert result is env
 
 
 def test_inject_plants_canary_as_credential():

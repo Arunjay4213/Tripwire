@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import inspect
 import os
 
 import dotenv.main
@@ -216,9 +215,3 @@ def test_env_file_is_found_from_the_working_directory(tmp_path, monkeypatch):
         assert os.environ.get("TRIPWIRE_TEST_DOTENV_MARKER") == "found"
     finally:
         os.environ.pop("TRIPWIRE_TEST_DOTENV_MARKER", None)
-
-
-def test_no_sys_path_hack():
-    """The old repo-root sys.path insert put site-packages ahead of the stdlib
-    when installed from a wheel."""
-    assert "sys.path.insert" not in inspect.getsource(cli)

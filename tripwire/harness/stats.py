@@ -9,6 +9,8 @@ def wilson_ci(successes: int, n: int, z: float = 1.96) -> tuple[float, float]:
     Honest for small sample sizes, unlike the naive p +/- z*sqrt(p(1-p)/n).
     Returns (lower, upper) bounds clamped to [0, 1].
     """
+    if n < 0 or successes < 0 or successes > n:
+        raise ValueError(f"wilson_ci needs 0 <= successes <= n, got successes={successes}, n={n}")
     if n == 0:
         return (0.0, 0.0)
     p = successes / n

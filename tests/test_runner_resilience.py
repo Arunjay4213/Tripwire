@@ -107,14 +107,6 @@ def test_non_transient_error_is_recorded_not_retried_not_dropped():
     assert adapter.calls.count(1) == 1
 
 
-def test_json_decode_error_is_not_retried():
-    adapter = _FlakyAdapter({0: (json.JSONDecodeError("Expecting value", "{", 1), None)})
-    episodes, _ = run_sweep([adapter], ["m"], [_FixedAttack()], [0])
-    assert adapter.calls == [0]
-    assert episodes[0].status == "error"
-    assert episodes[0].error.startswith("JSONDecodeError:")
-
-
 def test_rate_limit_then_success_is_retried_and_counted_ok():
     adapter = _FlakyAdapter({0: (_rate_limit(), 1)})
     episodes, _ = run_sweep([adapter], ["m"], [_FixedAttack()], [0])

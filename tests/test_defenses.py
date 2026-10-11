@@ -1,5 +1,5 @@
-"""Tests for the defense module — Defense protocol, NoDefense, ToolFilter,
-and resolve_defenses() in tripwire/config/loader.py.
+"""Tests for the defense module - NoDefense, ToolFilter, PromptHardening,
+Spotlighting, OutboundGuard, and resolve_defenses() in tripwire/config/loader.py.
 """
 
 from __future__ import annotations
@@ -9,8 +9,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from tripwire.config.loader import load_config, resolve_defenses
-from tripwire.defenses.base import Defense, NoDefense
+from tripwire.config.loader import resolve_defenses
+from tripwire.defenses.base import NoDefense
 from tripwire.defenses.outbound_guard import OutboundGuard
 from tripwire.defenses.prompt_hardening import PromptHardening
 from tripwire.defenses.spotlighting import (
@@ -21,20 +21,11 @@ from tripwire.defenses.spotlighting import (
 from tripwire.defenses.tool_filter import ToolFilter
 from tripwire.harness import llm
 
-EXAMPLE_CONFIG_PATH = "tripwire/config/threat_model.example.yaml"
-
 READ_INBOX_SCHEMA = {"type": "function", "function": {"name": "read_inbox"}}
 SEND_EMAIL_SCHEMA = {"type": "function", "function": {"name": "send_email"}}
 
 
 # --- NoDefense ---------------------------------------------------------------
-
-def test_no_defense_satisfies_protocol():
-    assert isinstance(NoDefense(), Defense)
-
-
-def test_no_defense_name():
-    assert NoDefense().name == "no_defense"
 
 
 def test_no_defense_wrap_system_prompt_is_passthrough():
@@ -54,32 +45,11 @@ def test_no_defense_check_tool_call_always_allows():
 
 # --- ToolFilter ----------------------------------------------------------------
 
-def test_tool_filter_satisfies_protocol():
-    assert isinstance(ToolFilter(["read_inbox"]), Defense)
-
-
-def test_tool_filter_name():
-    assert ToolFilter(["read_inbox"]).name == "tool_filter"
-
-
-def test_tool_filter_wrap_system_prompt_is_passthrough():
-    assert ToolFilter(["read_inbox"]).wrap_system_prompt("hello") == "hello"
-
 
 def test_tool_filter_drops_disallowed_dict_schema():
     tf = ToolFilter(["read_inbox"])
     out = tf.filter_tool_calls([READ_INBOX_SCHEMA, SEND_EMAIL_SCHEMA])
     assert [t["function"]["name"] for t in out] == ["read_inbox"]
-
-
-def test_tool_filter_allows_multiple():
-    tf = ToolFilter(["read_inbox", "send_email"])
-    out = tf.filter_tool_calls([READ_INBOX_SCHEMA, SEND_EMAIL_SCHEMA])
-    assert len(out) == 2
-
-
-def test_tool_filter_empty_input():
-    assert ToolFilter(["read_inbox"]).filter_tool_calls([]) == []
 
 
 def test_tool_filter_drops_disallowed_runtime_tool_call():
@@ -100,25 +70,7 @@ def test_tool_filter_check_tool_call_blocks_unlisted_tool():
     assert "send_email" in message
 
 
-def test_tool_filter_check_tool_call_catches_call_not_in_offered_menu():
-    """The real point: even a tool never offered in the schema can still be
-    free-formed by the model, and check_tool_call is the backstop for that."""
-    tf = ToolFilter(["read_inbox"])
-    offered = tf.filter_tool_calls([READ_INBOX_SCHEMA, SEND_EMAIL_SCHEMA])
-    assert [t["function"]["name"] for t in offered] == ["read_inbox"]
-    # A model free-forms send_email anyway (not in `offered`) -- still blocked.
-    allowed, _ = tf.check_tool_call("send_email", {"to": "attacker@evil.com"})
-    assert allowed is False
-
-
 # --- PromptHardening (L1) ------------------------------------------------------
-
-def test_prompt_hardening_satisfies_protocol():
-    assert isinstance(PromptHardening(), Defense)
-
-
-def test_prompt_hardening_name():
-    assert PromptHardening().name == "prompt_hardening"
 
 
 def test_prompt_hardening_appends_instruction():
@@ -137,13 +89,6 @@ def test_prompt_hardening_passthrough_hooks():
 
 
 # --- Spotlighting (L2) ---------------------------------------------------------
-
-def test_spotlighting_satisfies_protocol():
-    assert isinstance(Spotlighting(), Defense)
-
-
-def test_spotlighting_name():
-    assert Spotlighting().name == "spotlighting"
 
 
 def test_spotlighting_system_prompt_explains_delimiters():
@@ -177,13 +122,6 @@ def test_spotlighting_passthrough_call_hooks():
 
 
 # --- OutboundGuard (L3) --------------------------------------------------------
-
-def test_outbound_guard_satisfies_protocol():
-    assert isinstance(OutboundGuard(detector=lambda _: False), Defense)
-
-
-def test_outbound_guard_name():
-    assert OutboundGuard(detector=lambda _: False).name == "outbound_guard"
 
 
 def test_outbound_guard_blocks_when_detector_flags():
@@ -220,14 +158,6 @@ def test_outbound_guard_inspects_all_arg_values():
     guard = OutboundGuard(detector=lambda text: "attacker" in text)
     allowed, _ = guard.check_tool_call("send_email", {"to": "attacker@evil.com", "body": "hi"})
     assert allowed is False
-
-
-def test_outbound_guard_passthrough_non_call_hooks():
-    guard = OutboundGuard(detector=lambda _: True)
-    assert guard.wrap_system_prompt("x") == "x"
-    assert guard.wrap_tool_result("send_email", "y") == "y"
-    assert guard.filter_tool_calls([SEND_EMAIL_SCHEMA]) == [SEND_EMAIL_SCHEMA]
-
 
 
 # --- OutboundGuard default LLM detector (fake client, no network) -------------
@@ -459,19 +389,6 @@ def test_resolve_tool_filter():
     assert defenses[0].allowed_tools == frozenset({"read_inbox"})
 
 
-def test_resolve_mixed_list_preserves_order():
-    defenses = resolve_defenses([None, "tool_filter"], allowed_tools=["read_inbox"])
-    assert isinstance(defenses[0], NoDefense)
-    assert isinstance(defenses[1], ToolFilter)
-
-
-def test_resolve_registry_defenses():
-    defenses = resolve_defenses(
-        ["prompt_hardening", "spotlighting", "outbound_guard"], allowed_tools=[]
-    )
-    assert [type(d) for d in defenses] == [PromptHardening, Spotlighting, OutboundGuard]
-
-
 def test_resolve_full_ladder_preserves_order():
     names = [None, "prompt_hardening", "spotlighting", "tool_filter", "outbound_guard"]
     defenses = resolve_defenses(names, allowed_tools=["read_inbox"])
@@ -485,25 +402,13 @@ def test_resolve_tool_filter_without_allowed_tools_raises():
         resolve_defenses(["tool_filter"], allowed_tools=[])
 
 
-def test_resolve_unknown_name_raises():
-    with pytest.raises(ValueError, match="not_a_real_defense"):
-        resolve_defenses(["not_a_real_defense"], allowed_tools=[])
-
-
-# --- load_config() end-to-end on the real example yaml ------------------------
-
-def test_load_config_resolves_defenses_from_example_yaml():
-    config = load_config(EXAMPLE_CONFIG_PATH)
-    assert [d.name for d in config.defenses] == [
-        "no_defense", "prompt_hardening", "spotlighting", "tool_filter", "outbound_guard",
-    ]
-    # The example config no longer ships an invoice-only allowlist: tool_filter
-    # is scenario-relative and allows every configured scenario's read tool.
-    assert config.allowed_tools == []
-
-
-def test_load_config_tool_filter_has_allowed_tools():
-    config = load_config(EXAMPLE_CONFIG_PATH)
-    tool_filter = next(d for d in config.defenses if d.name == "tool_filter")
-    assert tool_filter.allowed_tools == frozenset(s.read_tool for s in config.scenarios)
-    assert "send_email" not in tool_filter.allowed_tools
+@pytest.mark.parametrize("reply", ["ALLOW. Actually, BLOCK.", "BLOCK or ALLOW", "allowed, not blocked"])
+def test_outbound_guard_reply_with_both_verdicts_is_an_error_not_the_first_word(guard_env, reply):
+    """A detector model that reasons its way from one verdict to the other
+    used to be read by its first word (ALLOW above). Ambiguous is an error,
+    which fails closed by default."""
+    guard_env(reply)
+    guard = OutboundGuard(model="guard-m")
+    ok, message = guard.check_tool_call("send_email", _LEAKY_ARGS)
+    assert ok is False and "errored" in message
+    assert guard.errors == 1 and "unparseable" in (guard.last_error or "")

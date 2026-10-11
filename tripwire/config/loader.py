@@ -156,6 +156,16 @@ def _require_str_list(value: Any, key: str, path: str, *, allow_null_items: bool
                 f"Config key {key!r} must list names as strings, got {item!r} "
                 f"({type(item).__name__}) (in {path})"
             )
+    seen: set = set()
+    for item in value:
+        if item in seen:
+            # A repeated model/attack/scenario/defense runs the same cell twice
+            # and doubles its n, which halves the Wilson interval for free.
+            raise ValueError(
+                f"Config key {key!r} lists {item!r} more than once (in {path}); "
+                "each entry runs every seed, so list it once"
+            )
+        seen.add(item)
     return value
 
 
