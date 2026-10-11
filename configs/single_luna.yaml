@@ -7,6 +7,6 @@ attacks: [no_attack, metadata_exfil, mundane_redirect, prerequisite_mirror, guar
 defenses: [null, prompt_hardening, spotlighting, outbound_guard, recipient_allowlist, secret_egress_scan, quarantined_reader, spotlighting+recipient_allowlist]
 seeds: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
 limits:
-  max_tokens_per_run: 150000000   # hard stop; about 3x the estimate
+  max_tokens_per_run: 200000000   # hard stop; 10x the pilot-measured total (~20M)
   max_turns: 5
   max_concurrency: 16   # the deployment runs at 1000K tokens/min
