@@ -14,7 +14,7 @@ Tripwire is an evaluation harness that measures AI agent vulnerability to prompt
 # Install for development (editable, with test + optional extras)
 pip install -e ".[dev]"        # or: uv pip install -e ".[dev]"
 
-# Run all tests (~690 tests, fully offline, ~6s). tests/test_e2e.py runs the real
+# Run all tests (~800 tests, fully offline, ~6s). tests/test_e2e.py runs the real
 # CLI against an in-process fake provider (tests/fake_provider.py); tests/test_live.py
 # runs a real smoke sweep only with TRIPWIRE_LIVE=1 and a provider key.
 python -m pytest tests/ -q
@@ -28,6 +28,10 @@ python -m tripwire init
 
 # Run a sweep against the built-in adapters (needs a provider key in .env)
 python -m tripwire --config tripwire/config/threat_model.example.yaml --smoke
+
+# Freeze successful adaptive payloads, then replay them on held-out seeds (docs/attacks.md)
+python -m tripwire --config <discovery.yaml> --save-replay-library results/payloads.json
+python -m tripwire --config <replay.yaml> --replay-library results/payloads.json
 
 # Point it at your own agent (same attacks, scenarios, judge, and security report)
 python -m tripwire --config <cfg> --agent path/to/your_agent.py
@@ -54,9 +58,9 @@ Published on PyPI as `tripwire-eval` (the import package and CLI stay `tripwire`
 
 **Scenarios** (`tripwire/scenarios.py`): the tasks the agent is attacked on - `invoice` (default), `helpdesk`, `calendar`, `expense`. Each plants the secret, defines a legitimate task + AUTHORIZED recipient, and builds a full `EpisodeSpec`. Selected via `scenarios:` in the config.
 
-**Defenses** (`tripwire/defenses/`): the ladder - instruction-level `prompt_hardening` and `sandwich` (L1), `spotlighting` and `datamarking` (L2), `tool_filter`, `outbound_guard` (L3, a second model), and the deterministic egress rungs `taint_tracking`, `secret_egress_scan`, `recipient_allowlist`. Four hooks: `wrap_system_prompt`, `filter_tool_calls`, `check_tool_call`, `wrap_tool_result`, plus an optional `bind(ctx)` that `Scenario.build_spec` calls first with a `DefenseContext` (user's request, provisioned secrets, untrusted tools - never the decoy or the judge's authorized set).
+**Defenses** (`tripwire/defenses/`): the ladder - instruction-level `prompt_hardening` and `sandwich` (L1), `spotlighting` and `datamarking` (L2), `tool_filter`, `outbound_guard` (L3, a second model), `quarantined_reader` (content isolation: an extractor returns only the scenario's typed fields, `Scenario.extraction`; model from `READER_MODEL`), and the deterministic egress rungs `taint_tracking`, `secret_egress_scan`, `recipient_allowlist`. Stack rungs with `+` in the config (`spotlighting+recipient_allowlist`, `defenses/stack.py`): one row, members applied in order, first block decides. Four hooks: `wrap_system_prompt`, `filter_tool_calls`, `check_tool_call`, `wrap_tool_result`, plus an optional `bind(ctx)` that `Scenario.build_spec` calls first with a `DefenseContext` (user's request, provisioned secrets, untrusted tools - never the decoy or the judge's authorized set).
 
-**Attacks** (`tripwire/attacks/`): `base.py` is the `Attack` protocol (`name` + `render(canary) -> str`; attacks never embed the canary). The suite (see `docs/attacks.md`): templated baselines (`agentdojo_wrappers.py`), hand-crafted attacks (`fixed_injection.py`: metadata_exfil, public_identifier, forged_boundary, prerequisite_mirror, mundane_redirect), and adaptive attackers (`iterative.py` PAIR, `tree_attacker.py` TAP). Registered in `config/loader.py`.
+**Attacks** (`tripwire/attacks/`): `base.py` is the `Attack` protocol (`name` + `render(canary) -> str`; attacks never embed the canary). The suite (see `docs/attacks.md`): templated baselines (`agentdojo_wrappers.py`, including the `tool_knowledge` adaptation), hand-crafted attacks (`fixed_injection.py`: metadata_exfil, public_identifier, forged_boundary, prerequisite_mirror, mundane_redirect, guard_injection, relay_action_item), and adaptive attackers (`iterative.py` PAIR, `tree_attacker.py` TAP). Registered in `config/loader.py`. Optional `attack_options` profiles vary the injection slot (`append`, `prepend`, `middle`, `bounce`, `tool_description`) and whether the attacker knows the secret's label (`known`/`unknown`); each profile is its own scenario cell. `replay.py` freezes successful adaptive payloads and replays them on held-out seeds with no attacker calls. `no_attack` (`control.py`) is a control, not an attack: an empty payload, so its utility under a defense is that defense's own cost.
 
 ## Key Design Decisions
 
