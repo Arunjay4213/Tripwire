@@ -2,7 +2,7 @@
 # Run with ATTACKER_MODEL, GUARD_MODEL and READER_MODEL set to DeepSeek-V4-Pro (gpt-5.6-luna rejects a set temperature).
 # Save the discovered payloads with --save-replay-library, then replay them on seeds 0..29 with --replay-library.
 models: [gpt-5.6-luna]
-adapters: [raw_loop, multi_agent, langgraph]   # drop langgraph if change 3 is accepted (parity tests show it sends identical requests to raw_loop)
+adapters: [raw_loop, multi_agent]   # langgraph dropped: the parity tests prove it sends raw_loop's exact requests; see configs/langgraph_sanity.yaml
 scenarios: [invoice, helpdesk, calendar, expense]
 attacks: [iterative]
 defenses: [null, prompt_hardening, spotlighting, outbound_guard]   # the rungs where search matters; the deterministic rungs block by construction

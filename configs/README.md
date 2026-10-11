@@ -19,6 +19,12 @@ Read the err column and the wall time; divide by the episode count for seconds p
     python -m tripwire --config configs/single_deepseek.yaml --output results/single_deepseek.json
     python -m tripwire --config configs/single_luna.yaml     --output results/single_luna.json
 
+## 1b. LangGraph sanity row (any window, a few minutes)
+
+    python -m tripwire --config configs/langgraph_sanity.yaml --output results/langgraph_sanity.json
+
+Compare its rows with the raw_loop rows for the same cells; the parity tests say they should agree up to sampling noise.
+
 ## 2. Adaptive discovery, one window per model
 
     python -m tripwire --config configs/adaptive_deepseek.yaml --output results/adaptive_deepseek.json --save-replay-library results/replay_deepseek.json

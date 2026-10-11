@@ -1,0 +1,12 @@
+# Sanity row for the dropped LangGraph adapter: a few seeds on one scenario, one model.
+# The parity tests prove langgraph sends the model exactly raw_loop's requests, so its full column
+# would duplicate raw_loop's up to sampling noise. This small run is the empirical check of that claim.
+models: [DeepSeek-V4-Pro]
+adapters: [langgraph]
+scenarios: [invoice]
+attacks: [no_attack, metadata_exfil, mundane_redirect, prerequisite_mirror, guard_injection, relay_action_item, important_instructions]
+defenses: [null, prompt_hardening, spotlighting, outbound_guard, recipient_allowlist, secret_egress_scan, quarantined_reader, spotlighting+recipient_allowlist]
+seeds: [0, 1, 2, 3, 4]
+limits:
+  max_turns: 5
+  max_concurrency: 16

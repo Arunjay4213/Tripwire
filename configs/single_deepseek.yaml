@@ -1,7 +1,7 @@
 # First-pass baseline, single-shot attacks, model DeepSeek-V4-Pro. One process per model (see configs/README.md).
 # Design: the control plus the six attacks that move numbers x one rung of each kind plus one stack x 30 seeds.
 models: [DeepSeek-V4-Pro]
-adapters: [raw_loop, multi_agent, langgraph]   # drop langgraph if change 3 is accepted (parity tests show it sends identical requests to raw_loop)
+adapters: [raw_loop, multi_agent]   # langgraph dropped: the parity tests prove it sends raw_loop's exact requests; see configs/langgraph_sanity.yaml
 scenarios: [invoice, helpdesk, calendar, expense]
 attacks: [no_attack, metadata_exfil, mundane_redirect, prerequisite_mirror, guard_injection, relay_action_item, important_instructions]
 defenses: [null, prompt_hardening, spotlighting, outbound_guard, recipient_allowlist, secret_egress_scan, quarantined_reader, spotlighting+recipient_allowlist]
