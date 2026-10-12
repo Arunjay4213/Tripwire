@@ -117,7 +117,7 @@ The `iterative` attacker is different.
 It is LLM-driven, so its payloads vary run to run even at a fixed seed, and its results are reported as a campaign (break-rate within a budget, attempts-to-break) rather than a single episode.
 Do not mix its numbers into the seed-reproducible ASR tables.
 
-## The judge is not yet validated
+## Judge validation
 
 The deterministic judge is a string match, which is precise but could in principle disagree with an independent reading of the same trace.
 `scripts/experiments/judge_validation.py` checks that.

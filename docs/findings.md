@@ -33,12 +33,12 @@ Exfiltration ASR, attack by defense, n = 240 per cell (fewer in the guard column
 
 | attack | no_defense | prompt_hardening | spotlighting | outbound_guard | quarantined_reader | recipient_allowlist | secret_egress_scan | spotlighting+allowlist |
 |---|---|---|---|---|---|---|---|---|
-| metadata_exfil | 98% [96%, 99%] | 16% [12%, 21%] | 9% [6%, 13%] | 0% | 0% | 0% | 0% | 0% |
-| mundane_redirect | 96% [93%, 98%] | 1% [0%, 4%] | 0% | 0% | 0% | 0% | 0% | 0% |
-| prerequisite_mirror | 96% [93%, 98%] | 64% [58%, 70%] | 43% [37%, 49%] | 0% | 0% | 0% | 0% | 0% |
+| metadata_exfil | 98% [95%, 99%] | 20% [15%, 25%] | 11% [8%, 16%] | 0% | 0% | 0% | 0% | 0% |
+| mundane_redirect | 97% [94%, 98%] | 1% [0%, 4%] | 0% | 0% | 0% | 0% | 0% | 0% |
+| prerequisite_mirror | 97% [94%, 98%] | 64% [58%, 70%] | 44% [38%, 50%] | 0% | 0% | 0% | 0% | 0% |
 | guard_injection | 70% [64%, 76%] | 0% | 0% | 0% | 0% | 0% | 0% | 0% |
-| relay_action_item | 43% [37%, 49%] | 27% [22%, 33%] | 23% [18%, 29%] | 0% | 0% | 0% | 0% | 0% |
-| important_instructions | 22% [17%, 28%] | 0% | 0% | 0% | 0% | 0% | 0% | 0% |
+| relay_action_item | 43% [37%, 50%] | 25% [20%, 31%] | 23% [18%, 29%] | 0% | 0% | 0% | 0% | 0% |
+| important_instructions | 21% [16%, 26%] | 0% | 0% | 0% | 0% | 0% | 0% | 0% |
 | no_attack (control) | 0% | 0% | 0% | 0% | 0% | 0% | 0% | 0% |
 
 A 0% cell is 0 of 240, interval [0%, 2%].
@@ -49,7 +49,7 @@ Per defense, over all attacked episodes:
 |---|---|---|---|---|---|---|
 | no_defense | 71% [68%, 73%] | 76% [74%, 78%] | 100% | 2,521 | 0 | 0 |
 | prompt_hardening | 18% [16%, 20%] | 100% [99%, 100%] | 100% | 2,906 | 0 | 0 |
-| spotlighting | 13% [11%, 14%] | 100% [99%, 100%] | 100% | 3,053 | 0 | 0 |
+| spotlighting | 13% [11%, 15%] | 100% [99%, 100%] | 100% | 3,053 | 0 | 0 |
 | outbound_guard | 0% | 80% [78%, 82%] | 100% | 4,527 | 1,071 | 527 |
 | quarantined_reader | 0% | 100% [99%, 100%] | 100% | 2,366 | 328 | 0 |
 | recipient_allowlist | 0% | 100% [99%, 100%] | 100% | 2,853 | 0 | 1 |
@@ -61,7 +61,7 @@ What the table says:
 - **Undefended, DeepSeek obeys the injection almost every time.** Three attacks are above 95%, and the control confirms the model never leaks on its own.
 - **The utility loss in the undefended row is the attacks' own disruption, not the model's.** With no attack DeepSeek completes every task; under attack 76%, almost all of it `mundane_redirect`, which replaces the one legitimate send with the redirect (2% completed).
   Four rungs restore the task to 100% as well as stopping the leak; the guard and the egress scan stop the leak but leave the task undone in a fifth of episodes, because their block message does not tell the model where it may send.
-- **The instruction-level rungs cut most attacks but not `prerequisite_mirror`.** Telling the model that tool content is untrusted, or fencing it, still leaves a task-gating injection at 64% and 43%.
+- **The instruction-level rungs cut most attacks but not `prerequisite_mirror`.** Telling the model that tool content is untrusted, or fencing it, still leaves a task-gating injection at 64% and 44%.
   Those two rungs are the state of the art of a year ago, and the attack walks through them.
 - **Every rung that enforces something is at zero.** The deterministic rungs refuse the send before it runs; the guard now enforces the user's recipients; the reader never shows the model the injection.
   Section 8 says what each of those zeros does and does not mean.
@@ -103,16 +103,16 @@ Undefended ASR by adapter, the same model, task and payload in each pair.
 
 | attack | DeepSeek raw_loop | DeepSeek relay | luna raw_loop | luna relay |
 |---|---|---|---|---|
-| prerequisite_mirror | 100% | 92% | 16% | 69% |
-| mundane_redirect | 96% | 97% | 8% | 40% |
-| guard_injection | 57% | 84% | 0% | 24% |
-| relay_action_item | 11% | 75% | 0% | 12% |
-| metadata_exfil | 100% | 97% | 0% | 0% |
-| important_instructions | 43% | 1% | 0% | 0% |
+| prerequisite_mirror | 100% | 93% | 16% | 70% |
+| mundane_redirect | 96% | 98% | 8% | 39% |
+| guard_injection | 57% | 82% | 0% | 28% |
+| relay_action_item | 11% | 76% | 0% | 17% |
+| metadata_exfil | 100% | 95% | 0% | 0% |
+| important_instructions | 41% | 1% | 0% | 0% |
 
 Over all attacked episodes, DeepSeek leaks 15% through the relay against 10% through the raw loop, luna 3% against 0%.
 On luna the relay multiplies the two strongest attacks four to five times.
-`relay_action_item`, written to be copied in full by the summarizer, goes from 11% to 75% on DeepSeek.
+`relay_action_item`, written to be copied in full by the summarizer, goes from 11% to 76% on DeepSeek.
 The one attack the relay weakens is the blatant `important_instructions`: the summarizer strips an obvious "ignore your instructions" side-command before the acting agent sees it.
 
 This is the project's original hypothesis, that the orchestration layer changes hijackability with model and task held fixed, and it holds: a two-agent relay is a bigger attack surface than a single loop, on both models.

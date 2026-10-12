@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Measured (2026-10-11 to 2026-10-12, `docs/findings.md`, `results/2026-10-11/`)
+
+- **Baseline sweep on the current code.** DeepSeek-V4-Pro and gpt-5.6-luna on Azure AI Foundry, raw loop and multi-agent relay, four scenarios, six attacks plus the `no_attack` control, eight defenses, 30 seeds: 26,880 episodes.
+  DeepSeek leaks to 71% of attacked episodes undefended; the prompt rungs leave `prerequisite_mirror` at 64% and 44%; every enforcing rung, the guard, the reader and the stack are at 0%.
+  Luna leaks 15% undefended and 0% under any defense.
+  The relay is more hijackable than the raw loop on both models.
+- **Adaptive attackers and held-out replay.** PAIR and TAP campaigns (960), then every defended win and a sample of the undefended ones replayed on 30 unseen seeds.
+  Undefended DeepSeek discoveries transfer at the fixed attacks' rate; defended ones at 16% to 19% on the rung they beat, almost entirely through the relay; nothing was found against the guard and nothing transfers to it.
+- **Judge validation.** 30 held-out episodes labeled blind to the judge's verdicts agree with it 30 of 30, Cohen's kappa 1.00.
+- **The `no_attack` control caught a judge bug** (case-sensitive task marker, fixed below) and Azure's content filter rejected 4.6% of the guard's calls on DeepSeek, recorded as errors, never as holds.
+
 ### Added (measurement)
 
 - **Every result records what it cost.** Episodes carry `prompt_tokens`, `completion_tokens`, `model_calls`, the model id the provider actually served (`served_model`, e.g. the dated Azure deployment version), and the defense's own `defense_calls` and `defense_tokens` (the outbound guard's and the quarantined reader's, summed in a stack); campaigns carry the target's totals and `attacker_tokens`.

@@ -14,7 +14,7 @@ Tripwire is an evaluation harness that measures AI agent vulnerability to prompt
 # Install for development (editable, with test + optional extras)
 pip install -e ".[dev]"        # or: uv pip install -e ".[dev]"
 
-# Run all tests (832 passed, 1 skipped, fully offline, ~7s). tests/test_e2e.py runs the real
+# Run all tests (843 passed, 1 skipped, fully offline, ~10s). tests/test_e2e.py runs the real
 # CLI, adapters and SDK against an in-process fake provider (tests/fake_provider.py, an
 # OpenAI-compatible server with scripted policies such as fake/obedient, fake/resistant);
 # tests/test_live.py runs a real smoke sweep only with TRIPWIRE_LIVE=1 and a provider key.
