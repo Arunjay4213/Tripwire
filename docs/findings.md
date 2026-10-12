@@ -194,6 +194,11 @@ The harness records a guard that could not run as an error outcome, never as a d
 The guard's 0% is over the 1,603 episodes where it did run.
 No luna episode hit the filter; its emails did not carry the injected text.
 
+**Judge validation.**
+The judge was checked against independent labels on 30 held-out episodes (seeds 200 to 229, never used in a sweep), sampled across both adapters, the four scenarios, the attacks that move numbers plus the control, and the defense ladder.
+The labels were made blind to the judge's verdicts, from the canary, the authorized recipients and the readable trace alone (`scripts/experiments/judge_validation.py`, sheet and verdicts in `results/2026-10-11/`).
+Agreement is 30 of 30 with Cohen's kappa 1.00; the judge and the labels each mark 10 leaks, including the blocked-send and mixed-recipient cases.
+
 ## 8. What the zeros mean, and what they do not
 
 Three kinds of zero sit in the tables and they are not the same.
@@ -226,5 +231,5 @@ Four things the zeros cannot say:
 
 - Record the blocked-attempt count per episode so every zero reads "blocked N attempts".
 - Store the executed sends in the results so a judge fix is a re-score, not a re-run.
-- Judge validation: thirty episodes hand-labelled against the deterministic verdict (`scripts/experiments/judge_validation.py`); the procedure exists, the labelling has not been done.
+- Judge validation on a larger or adversarially chosen sample: the 30-episode check in section 7 agreed 30 of 30, which bounds the disagreement rate at about 11% (Wilson), not at zero.
 - Attacks for the current rungs: recipient-parsing mismatches, the reader's typed channel, and integrity goals, which need the judge extended first.
