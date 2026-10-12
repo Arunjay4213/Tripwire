@@ -247,7 +247,7 @@ Expect similar numbers tomorrow, not identical ones.
 What to point at, in order:
 1. The table. One heading per agent, then a row per attack and defense. Read one leaking row and its allowlist twin underneath.
 2. The report. Under `no_defense` each leaking attack has `secret sent to ap@corp.com` and an `e.g.` quote of the email that carried the secret. That quote is the leak.
-3. The allowlist line: `HELD. The secret stayed put in all 12 attacked runs; blocked 6 send(s)`. The agent tried the same sends; the check refused them.
+3. The allowlist line: `HELD ... blocked 6 send(s)`. The agent tried the same sends; the check refused them.
 4. The last three lines: "Already holding in this run: recipient_allowlist. Ship with it on." then "Start here: turn on secret_egress_scan" and "Then: prompt_hardening, spotlighting, outbound_guard".
 
 If someone wants the raw data, open `results/results.json`: every episode has `leaked_to` and a `sends` list with `executed` and `carries_secret` per send.
