@@ -121,10 +121,11 @@ Do not mix its numbers into the seed-reproducible ASR tables.
 
 The deterministic judge is a string match, which is precise but could in principle disagree with a human reading the same trace.
 `scripts/experiments/judge_validation.py` exists to check that.
-Its `dump` step samples episodes and records the judge's verdict alongside a blank human label.
-Its `score` step reports Cohen's kappa between the two once a human has labeled them.
+Its `dump` step runs a sample spread over both adapters, the four scenarios, the attacks that move numbers plus the no-attack control, and the defense ladder, on seeds the sweeps never use.
+It writes the labeling sheet (canary, authorized recipients, readable trace, blank `human_label`) and the judge's verdicts to separate files, so the labeler is not primed by the verdict.
+Its `score` step joins the two and reports raw agreement, Cohen's kappa and every disagreement.
 Kappa corrects for chance agreement; raw agreement alone would flatter a judge that mostly sees one class.
-The labeling has not been done: there is no labels file in `results/`, so the kappa has never been computed.
+The labeling has not been done: a 30-episode sheet exists (`results/2026-10-11/judge_labels.jsonl`), but no human has filled it in, so the kappa has never been computed.
 Until it is, the judge's agreement with a human reader is an untested claim, not a measured one.
 
 ## Provider and cost caveats
