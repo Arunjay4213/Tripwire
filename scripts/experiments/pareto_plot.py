@@ -84,6 +84,18 @@ def aggregate(episodes: list[dict]) -> dict[str, dict]:
     return out
 
 
+def _clusters(names: list[str], agg: dict[str, dict]) -> list[list[str]]:
+    """Group points whose labels would collide: within 0.15 ASR and 0.1 utility
+    of a member (transitively), the label being about that wide on this axis."""
+    groups: list[list[str]] = []
+    for name in names:
+        x, y = agg[name]["asr"], agg[name]["utility"]
+        hits = [g for g in groups if any(abs(x - agg[m]["asr"]) < 0.15 and abs(y - agg[m]["utility"]) < 0.1 for m in g)]
+        merged = [name] + [m for g in hits for m in g]
+        groups = [g for g in groups if g not in hits] + [merged]
+    return groups
+
+
 def plot(agg: dict[str, dict], out_path: str, title: str) -> None:
     fig, ax = plt.subplots(figsize=(7.5, 6))
 
@@ -102,8 +114,28 @@ def plot(agg: dict[str, dict], out_path: str, title: str) -> None:
             color=color, ecolor=color, elinewidth=1.3, capsize=4, alpha=0.9,
             label=f"{defense} (n={s['n']})",
         )
-        ax.annotate(defense, (x, y), textcoords="offset points", xytext=(9, 6),
-                    fontsize=9, color=color)
+
+    # Labels. Several rungs usually sit on top of each other near (0%, 100%),
+    # so points that are close are labelled as one column beside the group,
+    # each label joined to its point by a thin line, instead of every label
+    # being printed over its neighbours.
+    for group in _clusters(ordered, agg):
+        if len(group) == 1:
+            defense = group[0]
+            x, y = agg[defense]["asr"], agg[defense]["utility"]
+            ax.annotate(defense, (x, y), textcoords="offset points", xytext=(9, 6),
+                        fontsize=9, color=COLORS.get(defense, "#555555"))
+            continue
+        group.sort(key=lambda d: (-agg[d]["utility"], agg[d]["asr"], d))
+        col_x = max(agg[d]["asr"] for d in group) + 0.05
+        top_y = max(agg[d]["utility"] for d in group)
+        for row, defense in enumerate(group):
+            x, y = agg[defense]["asr"], agg[defense]["utility"]
+            color = COLORS.get(defense, "#555555")
+            ax.annotate(defense, (x, y), xytext=(col_x, top_y - 0.045 * row),
+                        textcoords="data", fontsize=9, color=color, va="center",
+                        arrowprops={"arrowstyle": "-", "color": color, "lw": 0.6, "alpha": 0.5,
+                                    "shrinkA": 0, "shrinkB": 6})
 
     ax.set_xlabel("Attack success rate (ASR) — lower is better", fontsize=11)
     ax.set_ylabel("Utility retained (benign task completed) — higher is better", fontsize=11)
@@ -111,7 +143,7 @@ def plot(agg: dict[str, dict], out_path: str, title: str) -> None:
     ax.set_ylim(-0.05, 1.05)
     ax.set_title(title, fontsize=12)
     # The top-left corner is the ideal: no leaks, full utility.
-    ax.annotate("ideal", (0.02, 0.98), fontsize=10, color="#888888", style="italic")
+    ax.annotate("ideal", (0.0, 1.03), fontsize=10, color="#888888", style="italic", ha="center")
     ax.grid(True, linestyle=":", alpha=0.4)
     ax.legend(loc="lower right", fontsize=8, framealpha=0.9)
     fig.tight_layout()
