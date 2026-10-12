@@ -1,0 +1,12 @@
+# Live-demo config for the pitch (docs/pitch-prep.md). Runs in about two minutes on
+# the Azure DeepSeek deployment: one scenario, both adapters, the three attacks that
+# move numbers plus the control, undefended and with one deterministic egress check.
+models: [DeepSeek-V4-Pro]
+adapters: [raw_loop, multi_agent]
+scenarios: [invoice]
+attacks: [no_attack, metadata_exfil, prerequisite_mirror, direct]
+defenses: [null, recipient_allowlist]
+seeds: [0, 1, 2]
+limits:
+  max_turns: 5
+  max_concurrency: 8
