@@ -91,9 +91,11 @@ def plot(agg: dict[str, dict], out_path: str, title: str) -> None:
     for defense in ordered:
         s = agg[defense]
         x, y = s["asr"], s["utility"]
-        # Asymmetric error bars: distance from the point to each CI bound.
-        xerr = [[x - s["asr_ci"][0]], [s["asr_ci"][1] - x]]
-        yerr = [[y - s["utility_ci"][0]], [s["utility_ci"][1] - y]]
+        # Asymmetric error bars: distance from the point to each CI bound. The
+        # Wilson interval is not centered on the point estimate, so at 0% or
+        # 100% a bound can sit a hair past the point; clamp at zero.
+        xerr = [[max(0.0, x - s["asr_ci"][0])], [max(0.0, s["asr_ci"][1] - x)]]
+        yerr = [[max(0.0, y - s["utility_ci"][0])], [max(0.0, s["utility_ci"][1] - y)]]
         color = COLORS.get(defense, "#555555")
         ax.errorbar(
             x, y, xerr=xerr, yerr=yerr, fmt="o", markersize=10,
