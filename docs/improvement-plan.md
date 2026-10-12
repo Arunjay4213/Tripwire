@@ -27,7 +27,7 @@ Confidence scale: very high, high, medium, low.
 | Relay-aware attack | Done (2026-10-11), effect unmeasured (`relay_action_item`) | Medium | multi_agent rows only. | The summarizer is told to list recipients and action items. That instruction is targetable, but the id must survive two hops. |
 | Guard-directed attack | Done (2026-10-11), effect unmeasured (`guard_injection`) | Medium-high against the guard only | Guard ASR up. | The guard reads the attacker-influenced body. Once the guard fences its input, this attack weakens. |
 | AgentDojo `tool_knowledge` port | Done (2026-10-11), effect unmeasured: local tool/placeholder adaptation, registered in CLI/AgentDojo experiment. | Medium | Moderate. | The named-user gap remains; the adaptation uses a scenario sender rather than a known real user. |
-| Replay library | Done (2026-10-11), effect unmeasured: PAIR/TAP best payloads, versioned provenance, frozen replay, disjoint discovery/replay seeds. | Does not raise ASR | Changes honesty, not strength. | Tests transfer of a discovered candidate to fresh canaries without regeneration. Repeated stochastic runs still needed to assess luck. |
+| Replay library | Done (2026-10-11), held-out replay in progress: PAIR/TAP best payloads, versioned provenance, frozen replay, disjoint discovery/replay seeds. | Does not raise ASR | Changes honesty, not strength. | Tests transfer of a discovered candidate to fresh canaries without regeneration. Repeated stochastic runs still needed to assess luck. |
 | Remove oracle knowledge of the secret label | Done (2026-10-11), effect unmeasured: optional known/unknown initial-knowledge profiles. Adaptive feedback can reveal a label. | High that it lowers ASR | Numbers go down. | Attacks currently know the deployment's variable name. Realism, not strength. |
 
 ## Defense side
@@ -46,7 +46,7 @@ Nothing in this table has been measured on a real model yet.
 | Agent B coverage in multi_agent | Done (2026-10-11), offline-verified, effect unmeasured | `EpisodeSpec.system_prompt_wrapper` (the defense's `wrap_system_prompt`) is applied to B's own persona, and A's summary passes through `wrap_tool_result` as the pseudo-tool `handoff`, so it is fenced, marked or taint-tracked like any tool output. The strict expected failure in `tests/test_e2e.py` now passes and is a normal test; a new test checks the handoff is fenced under spotlighting. This changes the existing `multi_agent` rows. | High for multi_agent rows | Brings multi_agent L1/L2 to roughly single-agent levels. | Before this, the agent that sends email had no defense at all. |
 | Taint tracking | Done (2026-10-11), offline-verified, effect unmeasured | `taint_tracking`: every address in a non-sink tool's output (the relay handoff included) that is not in the user's request is tainted; a send to a tainted address is blocked; the set resets every episode. Offline (scripted fake provider, not a real model): obedient agent 0% ASR, compliant agent 100% utility. Known gap: an address the model reconstructs from obfuscated text ("ap at corp dot com") is not caught; the allowlist is. | High for redirect attacks, with false-positive risk | Blocks any decoy address that first appeared in tool output. | Every current redirect address appears only in tool results. Legitimate recipients appear in the user message, so utility should hold in the four scenarios. |
 | Quarantined reader (CaMeL-style typed extraction) | Done (2026-10-11), offline-verified, effect unmeasured | `quarantined_reader`: each scenario declares typed fields (`Scenario.extraction`, on `DefenseContext.fields`); an extractor model returns only those as JSON; every value is validated by kind; the agent sees the record, never the text. Fails closed. Tests: every scenario keeps its task marker with three registered attacks appended and the decoy never reaches the record; a poisoned value is dropped; end to end, the document reaches only the extractor request. | Medium | Strong in the literature. Utility cost unknown here. | Highest implementation cost. Needs typed extraction per scenario. |
-| No-attack control run | Done (2026-10-11), effect unmeasured: `no_attack` control implemented; the run is track 1 | An empty payload; `Scenario.build_spec` leaves content, tool descriptions and the send path untouched in every injection slot. Its utility under a defense is the defense's own cost. | Measurement only | Separates a defense's utility cost from attack disruption. | Needed to say anything about cost. |
+| No-attack control run | Done and measured (2026-10-11): `no_attack` control in the baseline; DeepSeek undefended utility 100% unattacked vs 76% attacked | An empty payload; `Scenario.build_spec` leaves content, tool descriptions and the send path untouched in every injection slot. Its utility under a defense is the defense's own cost. | Measurement only | Separates a defense's utility cost from attack disruption. | Needed to say anything about cost. |
 
 Also done on the defense track, outside the table:
 
@@ -63,8 +63,7 @@ Attack side first.
 2. Templated hand-crafted attacks, retargeted `public_identifier` and `forged_boundary`, guard-directed and relay-aware classes. Done (2026-10-11).
 3. PAIR rewrite around the destination-aware objective with the redacted observation feedback. Done (2026-10-11).
 4. TAP scorer, critic as tiebreaker, dedup, technique memory, partial-JSON salvage, keep `best_payload`, lift the verbatim constraint. Done (2026-10-11), including PAIR best-payload persistence and encoding guidance.
-5. Fresh baseline sweep, then measure. Not done (measurement).
-   The only results newer than the attack rewrite are three errored episodes from a retired Groq model.
+5. Fresh baseline sweep, then measure. Done 2026-10-11: `results/2026-10-11/`, written up in `findings.md`.
 6. Injection slots and `tool_knowledge` port as a second wave. Done (2026-10-11); compare each surface separately after the baseline.
 7. Freeze successful adaptive discoveries, then replay on at least 30 held-out seeds per candidate/profile. Code done (2026-10-11); real-model evaluation pending.
 8. Compare known vs unknown secret-label profiles with identical target settings. Code done (2026-10-11); real-model evaluation pending.
@@ -97,12 +96,11 @@ The one cross-track rule: track 1 runs the baseline on the code as of 2026-10-11
 Owns the numbers.
 Nothing here changes an attack or a defense; it makes the other two tracks' results trustworthy.
 
-1. Fresh baseline sweep on the code as of 2026-10-11: the three adapters the dev extra installs (raw_loop, langgraph, multi_agent; crewai needs the optional extra), four scenarios, every attack, every defense, 30 seeds per cell, on the deployed models (`gpt-4.1-mini`, `DeepSeek-V4-Pro`, `gpt-5.6-luna`).
-2. No-attack control run, so a defense's utility cost can be separated from attack disruption.
-   The `no_attack` control is implemented; the run is pending.
-3. Replay library, so a tree-search win at temperature can be checked for luck. Code done (2026-10-11); held-out real-model evaluation pending.
-4. Stacked defenses as a measurement feature (a composite that applies several rungs), so L1+L2 and L2+allowlist cells exist when track 3 lands. Done (2026-10-11) (`a+b` in config); both cells are in the example ladder; runs pending.
-5. Rewrite `findings.md` from the new results and refresh the deck numbers.
+1. Fresh baseline sweep on the code as of 2026-10-11. Done: two models (`DeepSeek-V4-Pro`, `gpt-5.6-luna`; 4.1-mini dropped), raw_loop and multi_agent (langgraph dropped after a 280-episode sanity row agreed with raw_loop in 52 of 56 cells), four scenarios, the six attacks that move numbers plus the control, one rung of each kind plus one stack, 30 seeds. 26,880 episodes; `results/2026-10-11/`.
+2. No-attack control run, so a defense's utility cost can be separated from attack disruption. Done 2026-10-11, in the same sweep; it also caught a case-sensitive task-marker bug in the judge (fixed, calendar cells re-run and spliced).
+3. Replay library, so a tree-search win at temperature can be checked for luck. Discovery done 2026-10-11 (DeepSeek 150 payloads, luna 5); held-out replay running, result goes in `findings.md` section 5.
+4. Stacked defenses as a measurement feature (a composite that applies several rungs), so L1+L2 and L2+allowlist cells exist when track 3 lands. Done; `spotlighting+recipient_allowlist` measured in the baseline (0% ASR, 100% utility on both models).
+5. Rewrite `findings.md` from the new results and refresh the deck numbers. `findings.md` rewritten 2026-10-11 (replay section pending the run); deck numbers next.
 
 ### Track 2: attack side, second wave
 
