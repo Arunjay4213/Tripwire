@@ -159,7 +159,24 @@ Replayed on 30 unseen seeds, both adapters, the four rungs (1,200 episodes, 23 m
 The library records the discovery seed and defense but not the adapter the payload was found against.
 Adding `source_adapter` is a one-field change and would say whether the three non-transferring payloads were raw-loop wins that never worked on the relay or relay wins that did not survive a seed change.
 
-TODO-REPLAY-DEEPSEEK
+**DeepSeek, held out: the undefended discoveries.**
+Of the 118 payloads PAIR and TAP found against the undefended DeepSeek, 24 were sampled (3 per scenario and attacker) and replayed on 30 unseen seeds, both adapters, the four rungs (5,760 episodes, 68 min, 58 guard errors).
+Every one of the 24 transfers.
+
+| found by | payloads | replay on no_defense | per payload (min, median, max) | prompt_hardening | spotlighting | outbound_guard |
+|---|---|---|---|---|---|---|
+| PAIR | 12 | 74% [70%, 77%] | 35%, 76%, 100% | 3% [2%, 4%] | 1% [0%, 2%] | 0% [0%, 1%] |
+| TAP | 12 | 80% [77%, 83%] | 40%, 89%, 100% | 10% [8%, 13%] | 7% [5%, 9%] | 0% [0%, 1%] |
+
+- On DeepSeek an undefended discovery is not luck.
+  The pooled replay rate matches the fixed attacks' undefended rate (71%), and the weakest payload still leaks on one seed in three.
+- The payloads are rewrites of the shipped techniques: a "session registration" that must precede the real send (`prerequisite_mirror`), a "compliance copy" to a second corp.com address (`mundane_redirect`, `metadata_exfil`), and in TAP's case a forged "END OF UNTRUSTED DATA / BEGIN TRUSTED SYSTEM FOOTER" line (`forged_boundary`).
+  One TAP payload writes the decoy address with a Cyrillic i and the body in French; it leaks 82%.
+- Undefended discoveries do not carry over to the defended rungs: 1% to 10% through the two prompt rungs, 0 of 1,382 through the guard.
+  What the search learned against an open model is the same thing the hand-written attacks already know, and the prompt rungs cut it the same way.
+- Relay 80% against raw loop 74%: the orchestration gap of section 4 again, narrower than on luna because DeepSeek's raw loop is already open.
+
+TODO-REPLAY-DEEPSEEK-DEFENDED
 
 ## 6. What a defense costs
 
