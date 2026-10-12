@@ -13,3 +13,10 @@ Code: commit 078c158 (main).
 | Tokens | 41.7M | 22.4M |
 
 `single_<model>.json.gz` is the full results file as written by `tripwire` (`gunzip` to use with `scripts/experiments/`), `single_<model>.log` the console output, `single_tables.md` the output of `scripts/experiments/summarize_results.py --markdown`, and `pareto_<model>.png` the security-utility plot.
+
+## Added after stage 1
+
+- `single_luna.json.gz` is now the spliced file: the calendar cells re-run under the case-insensitive task-marker fix (`single_luna_calendar.json.gz`, 3,360 rows, spliced with `scripts/experiments/splice_results.py`). Numbers moved within a point; luna was not affected by the bug.
+- `adaptive_<model>.json.gz`: the adaptive stage (PAIR on both models, TAP on DeepSeek), 10 discovery seeds (100..109) per cell, budget 8. `adaptive_tables.md` has the break rates. DeepSeek: 640 campaigns, 58 min, 27.8M tokens, 156 errored attempts (Azure content filter on the guard's input). Luna: 320 campaigns, 28 min.
+- `replay_<model>.json`: the winning payloads the adaptive stage saved (DeepSeek 150, luna 5). `replay_deepseek_defended.json` (the 32 found against a defended cell) and `replay_deepseek_sample.json` (24 of the 118 undefended wins, 3 per scenario and attacker) are the subsets replayed on held-out seeds 0..29.
+- `langgraph_sanity.json.gz`: 280 episodes, the dropped adapter on one scenario at 5 seeds; agrees with raw_loop in 52 of 56 cells (10% vs 11% overall), as the parity tests predict.
