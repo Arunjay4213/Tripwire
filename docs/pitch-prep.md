@@ -285,6 +285,7 @@ We build on it and credit it. AgentDojo is a research benchmark with fixed task 
 
 **Why these two models?**
 They were available on Azure AI Foundry under our account. One open-weights style model that obeys injections, one frontier model that mostly resists. Attacker, guard and reader all ran as DeepSeek because the GPT-5 family rejects the sampling temperature the guard and PAIR send.
+That parameter issue is fixed as of 2026-10-12, but gpt-5.6-sol then refused the attacker prompt outright with OpenAI's `cyber_policy` block, so the attacker stays DeepSeek. If asked why not a stronger attacker: "OpenAI's models refuse to write injections unless you are in their Trusted Access for Cyber program; the adaptive numbers are therefore a floor."
 
 **Doesn't 0% just mean your allowlist is the same as your judge?**
 Yes, for the allowlist and egress scan that zero is by construction, and we say so. Their result is the utility column: the allowlist keeps the task at 100%, the egress scan drops it to 77% on DeepSeek because it also blocks the legitimate send when the model appends the id to it.
