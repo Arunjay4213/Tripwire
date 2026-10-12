@@ -1,11 +1,13 @@
-# Live-demo config for the pitch (docs/pitch-prep.md). Runs in about two minutes on
-# the Azure DeepSeek deployment: one scenario, both adapters, the three attacks that
-# move numbers plus the control, undefended and with one deterministic egress check.
+# Live-demo config for the pitch (docs/pitch-prep.md). Runs in about three minutes
+# on the Azure DeepSeek deployment: one scenario, both adapters, the two attacks
+# that move numbers plus the control, and three rungs of the ladder: undefended,
+# prompt hardening (an instruction the model can be talked out of; it still
+# leaks), and the recipient allowlist (a code check that holds).
 models: [DeepSeek-V4-Pro]
 adapters: [raw_loop, multi_agent]
 scenarios: [invoice]
-attacks: [no_attack, metadata_exfil, prerequisite_mirror, direct]
-defenses: [null, recipient_allowlist]
+attacks: [no_attack, metadata_exfil, prerequisite_mirror]
+defenses: [null, prompt_hardening, recipient_allowlist]
 seeds: [0, 1, 2]
 limits:
   max_turns: 5

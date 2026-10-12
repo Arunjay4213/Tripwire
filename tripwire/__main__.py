@@ -295,6 +295,7 @@ def main() -> None:
     for warning in config.warnings:
         print(f"Warning: {warning}", file=sys.stderr)
 
+    print(f"Target model(s): {', '.join(config.models)}")
     print(f"Provider: {_provider_label()}")
     if args.preflight:
         _preflight(config)
