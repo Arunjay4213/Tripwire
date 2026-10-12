@@ -227,6 +227,10 @@ def main() -> None:
              "suite against it instead of the configured adapters",
     )
     parser.add_argument(
+        "--details", action="store_true",
+        help="add the utility and tokens columns to the tables (always in the results file)",
+    )
+    parser.add_argument(
         "--strict", action="store_true",
         help=f"exit {EXIT_ERRORS_STRICT} if any episode errored (default: warn and exit 0)",
     )
@@ -344,10 +348,10 @@ def main() -> None:
     if any(_is_scored(r) for r in [*episodes, *campaigns]):
         if episodes:
             print()
-            print_asr_table(episodes)
+            print_asr_table(episodes, details=args.details)
         if campaigns:
             print()
-            print_campaign_table(campaigns)
+            print_campaign_table(campaigns, details=args.details)
         print()
         print_security_report(episodes, campaigns)
 

@@ -75,7 +75,7 @@ def _rows(out: str) -> list[list[str]]:
 
 def test_print_asr_table_exact_row(capsys):
     """One cell: n, leak, ASR, CI, utility, err and max_turns are exact."""
-    print_asr_table(_results())
+    print_asr_table(_results(), details=True)
     out = capsys.readouterr().out
     assert out.splitlines()[0] == "raw_loop · llama · invoice"
     assert out.splitlines()[1].split() == [
@@ -84,6 +84,16 @@ def test_print_asr_table_exact_row(capsys):
         ["raw_loop", "llama", "invoice", "fixed", "no_defense", "3", "2", "67%",
          "[21%, 94%]", "0%", "0"],
     ]
+
+
+def test_print_asr_table_default_hides_utility_and_tokens(capsys):
+    print_asr_table(_results())
+    out = capsys.readouterr().out
+    assert out.splitlines()[1].split() == ["attack", "defense", "n", "leak", "ASR", "95%", "CI"]
+    assert _rows(out) == [
+        ["raw_loop", "llama", "invoice", "fixed", "no_defense", "3", "2", "67%", "[21%, 94%]"],
+    ]
+    assert "utility" not in out and "tokens" not in out
 
 
 def test_asr_table_splits_by_scenario(capsys):
@@ -189,7 +199,7 @@ def test_asr_table_excludes_errors_from_n_and_counts_them(capsys):
                       stop_reason="max_turns"),
         _err(), _err(), _err(),
     ]
-    print_asr_table(results)
+    print_asr_table(results, details=True)
     out = capsys.readouterr().out
     (row,) = _rows(out)
     # n=2 scored (not 5), 1 leak -> 50%, utility 1/2, 3 errors, 1 hit max_turns.
@@ -206,7 +216,7 @@ def test_asr_table_hides_err_and_capped_columns_when_zero(capsys):
 
 
 def test_asr_table_cell_with_only_errors_shows_dashes(capsys):
-    print_asr_table([_err()])
+    print_asr_table([_err()], details=True)
     (row,) = _rows(capsys.readouterr().out)
     assert row[5:] == ["0", "0", "-", "-", "-", "1", "-"]  # err column shown, capped hidden
 
@@ -265,7 +275,7 @@ def test_campaign_table_excludes_aborted_campaigns_and_shows_eval_errors(capsys)
         return CampaignResult(adapter="raw_loop", model="m", attack="iterative", seed=0,
                               broke=broke, attempts_to_break=2 if broke else None, budget=8,
                               status=status, errors=errors)
-    print_campaign_table([c(True), c(False, errors=3), c(False, status="error")])
+    print_campaign_table([c(True), c(False, errors=3), c(False, status="error")], details=True)
     (row,) = _rows(capsys.readouterr().out)
     # n=2 scored (aborted one excluded), 1 broke, 1 aborted, 3 evaluation errors.
     assert row[6:9] == ["2", "1", "50%"]

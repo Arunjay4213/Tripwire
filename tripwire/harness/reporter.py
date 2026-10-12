@@ -134,9 +134,13 @@ def _print_grouped(
             print(fmt(r))
 
 
-def print_asr_table(results: list[EpisodeResult]) -> None:
+def print_asr_table(results: list[EpisodeResult], *, details: bool = False) -> None:
     """Print the attack-success-rate table grouped by (adapter, model, scenario,
     attack, defense).
+
+    By default the columns are n, leak, ASR and the 95% CI. `details` adds
+    utility and tokens (the CLI's --details flag); both are always in the
+    results file.
 
     Each row shows: scored trials (n), leaks, ASR%, 95% Wilson CI, and
     utility% (how often the agent still completed its real, benign task; see
@@ -182,16 +186,21 @@ def print_asr_table(results: list[EpisodeResult]) -> None:
             ),
         }))
 
-    headers = ["attack", "defense", "n", "leak", "ASR", "95% CI", "utility"]
+    headers = ["attack", "defense", "n", "leak", "ASR", "95% CI"]
+    if details:
+        headers.append("utility")
     if total_err:
         headers.append("err")
     if total_capped:
         headers.append("capped")
-    headers.append("tokens")
+    if details:
+        headers.append("tokens")
     _print_grouped(headers, [(key, [c[h] for h in headers]) for key, c in cells], n_left=2)
     print()
-    print(_wrap("leak = the planted secret reached a recipient the task never authorized; "
-                "utility = the real task still got done.", "  "))
+    legend = "leak = the planted secret reached a recipient the task never authorized"
+    if details:
+        legend += "; utility = the real task still got done; tokens = mean per episode, defense calls included"
+    print(_wrap(legend + ".", "  "))
     if total_err:
         print(f"  note: {total_err} episode(s) errored and are excluded from n/ASR/utility "
               "(err column); treat cells with many errors as suspect.")
@@ -200,9 +209,10 @@ def print_asr_table(results: list[EpisodeResult]) -> None:
               "(capped column).")
 
 
-def print_campaign_table(campaigns: list[CampaignResult]) -> None:
+def print_campaign_table(campaigns: list[CampaignResult], *, details: bool = False) -> None:
     """Print the adaptive-attacker effort-to-break table, grouped by
-    (adapter, model, scenario, attack, defense, budget).
+    (adapter, model, scenario, attack, defense, budget). `details` adds the
+    tokens column.
 
     Each row shows: campaigns run, break-rate within budget + 95% Wilson CI, and
     median/mean attempts-to-break over the campaigns that broke. `err` counts
@@ -237,9 +247,13 @@ def print_campaign_table(campaigns: list[CampaignResult]) -> None:
             f"{statistics.mean(c.target_prompt_tokens + c.target_completion_tokens + c.attacker_tokens + c.defense_tokens for c in scored):.0f}" if n else "-",
         ]))
 
+    if not details:
+        headers = headers[:-1]
+        rows = [(key, r[:-1]) for key, r in rows]
     _print_grouped(headers, rows, n_left=2)
     print()
-    print("  rate = share of campaigns in which the adaptive attacker leaked the secret within its budget.")
+    print(_wrap("rate = share of campaigns in which the adaptive attacker leaked the secret "
+                "within its budget.", "  "))
 
 
 # --- security report ---------------------------------------------------------

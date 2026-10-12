@@ -718,6 +718,7 @@ def test_every_result_carries_what_it_cost_and_the_served_model(tmp_path, monkey
         tmp_path, monkeypatch, capsys, provider,
         _config(adapters=["raw_loop"], attacks=["metadata_exfil", "iterative"],
                 defenses=["null", "outbound_guard"], campaign_budget=2),
+        "--details",
     )
     assert code == 0, err
     by_defense = {e["defense"]: e for e in results["episodes"]}
@@ -729,7 +730,7 @@ def test_every_result_carries_what_it_cost_and_the_served_model(tmp_path, monkey
     campaign = next(c for c in results["campaigns"] if c["defense"] == "no_defense")
     assert campaign["broke"] is True and campaign["target_model_calls"] == 3
     assert campaign["attacker_tokens"] == 2  # one attacker call, 1 + 1
-    assert "tokens" in out  # the new column is in both tables
+    assert "tokens" in out  # the column is in both tables under --details
 
 
 def test_token_cap_from_the_config_stops_the_sweep_and_is_reported(tmp_path, monkeypatch, capsys, provider):
