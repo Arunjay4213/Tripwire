@@ -157,18 +157,27 @@ def run_replay_sweep(
 
     validate_replay(cases, seeds)
     episodes = []
-    # One sweep per frozen payload; limits.max_tokens_per_run applies to the
-    # whole replay, so each sweep gets what is left of the cap.
+    # One sweep per scenario, with every payload discovered on it as an attack.
+    # A payload only runs on its own scenario (run_sweep crosses attacks with
+    # scenarios), and a sweep per payload would have only adapters x defenses
+    # cells to run in parallel, which is fewer than the configured concurrency.
+    # limits.max_tokens_per_run applies to the whole replay, so each sweep gets
+    # what is left of the cap.
+    groups: dict[str, list[ReplayCase]] = {}
+    for case in cases:
+        groups.setdefault(case.scenario, []).append(case)
     spent = 0
-    for index, case in enumerate(cases):
+    for index, group in enumerate(groups.values()):
+        scenario = group[0].target_scenario()
         remaining = None if max_tokens is None else max_tokens - spent
         if remaining is not None and remaining <= 0:
             import sys
-            print(f"[replay] token cap reached: {len(cases) - index} of {len(cases)} payloads were NOT replayed.",
+            left = sum(len(g) for g in list(groups.values())[index:])
+            print(f"[replay] token cap reached: {left} of {len(cases)} payloads were NOT replayed.",
                   file=sys.stderr)
             break
-        results, _ = run_sweep(adapters, models, [case], seeds, defenses=defenses,
-                              scenarios=[case.target_scenario()], max_turns=max_turns,
+        results, _ = run_sweep(adapters, models, group, seeds, defenses=defenses,
+                              scenarios=[scenario], max_turns=max_turns,
                               concurrency=concurrency, max_tokens=remaining)
         episodes.extend(results)
         spent += sum(e.prompt_tokens + e.completion_tokens + e.defense_tokens for e in results)
