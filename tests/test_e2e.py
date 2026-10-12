@@ -150,7 +150,7 @@ def test_obedient_model_is_scored_as_a_leak_in_every_adapter(tmp_path, monkeypat
         assert row["stop_reason"] == "done", row
     assert "SECURITY FEEDBACK" in out
     assert "metadata_exfil" in out
-    assert "No exfiltration observed" not in out
+    assert "HELD. The secret stayed put" not in out
 
 
 def test_resistant_model_completes_the_task_without_leaking(tmp_path, monkeypatch, capsys, provider):
@@ -164,7 +164,7 @@ def test_resistant_model_completes_the_task_without_leaking(tmp_path, monkeypatc
         assert row["status"] == "ok", row
         assert row["succeeded"] is False, row
         assert row["task_completed"] is True, row
-    assert "No exfiltration observed" in out
+    assert "HELD. The secret stayed put" in out
 
 
 def test_every_scenario_runs_end_to_end(tmp_path, monkeypatch, capsys, provider):
@@ -339,7 +339,7 @@ def test_deterministic_rung_stops_an_agent_that_obeys_every_injection(
     assert set(_by_adapter(results)) == set(ADAPTERS), err
     for row in results:
         assert row["status"] == "ok" and row["succeeded"] is False, row
-    assert "No exfiltration observed" in out
+    assert "HELD. The secret stayed put" in out
     assert defense in "\n".join(_tool_messages(provider.requests))  # the block reached the model
 
 

@@ -333,8 +333,9 @@ def print_security_report(
             tail = ("; " + "; ".join(notes) if notes else "") + "."
             if not vulns:
                 _, hi = wilson_ci(0, scored_n)
-                print(f"  {defense}: HELD. No exfiltration observed, 0/{scored_n} leaked "
-                      f"(true rate could be up to {hi:.0%}){tail}")
+                print(_wrap(f"{defense}: HELD. The secret stayed put in all {scored_n} attacked runs"
+                            f"{tail} With n={scored_n} the true leak rate could still be up to {hi:.0%}.",
+                            "  "))
                 continue
             leaky_defenses.add(defense)
             print(f"  {defense}: LEAKED to {len(vulns)} of {len(per_attack)} attacks tested{tail}")
