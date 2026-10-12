@@ -27,7 +27,7 @@ Confidence scale: very high, high, medium, low.
 | Relay-aware attack | Done (2026-10-11), effect unmeasured (`relay_action_item`) | Medium | multi_agent rows only. | The summarizer is told to list recipients and action items. That instruction is targetable, but the id must survive two hops. |
 | Guard-directed attack | Done (2026-10-11), effect unmeasured (`guard_injection`) | Medium-high against the guard only | Guard ASR up. | The guard reads the attacker-influenced body. Once the guard fences its input, this attack weakens. |
 | AgentDojo `tool_knowledge` port | Done (2026-10-11), effect unmeasured: local tool/placeholder adaptation, registered in CLI/AgentDojo experiment. | Medium | Moderate. | The named-user gap remains; the adaptation uses a scenario sender rather than a known real user. |
-| Replay library | Done (2026-10-11), held-out replay in progress: PAIR/TAP best payloads, versioned provenance, frozen replay, disjoint discovery/replay seeds. | Does not raise ASR | Changes honesty, not strength. | Tests transfer of a discovered candidate to fresh canaries without regeneration. Repeated stochastic runs still needed to assess luck. |
+| Replay library | Done (2026-10-11), held-out replay done 2026-10-12 (`findings.md` section 5): PAIR/TAP best payloads, versioned provenance, frozen replay, disjoint discovery/replay seeds. | Does not raise ASR | Changes honesty, not strength. | Tests transfer of a discovered candidate to fresh canaries without regeneration. Repeated stochastic runs still needed to assess luck. |
 | Remove oracle knowledge of the secret label | Done (2026-10-11), effect unmeasured: optional known/unknown initial-knowledge profiles. Adaptive feedback can reveal a label. | High that it lowers ASR | Numbers go down. | Attacks currently know the deployment's variable name. Realism, not strength. |
 
 ## Defense side
@@ -65,16 +65,16 @@ Attack side first.
 4. TAP scorer, critic as tiebreaker, dedup, technique memory, partial-JSON salvage, keep `best_payload`, lift the verbatim constraint. Done (2026-10-11), including PAIR best-payload persistence and encoding guidance.
 5. Fresh baseline sweep, then measure. Done 2026-10-11: `results/2026-10-11/`, written up in `findings.md`.
 6. Injection slots and `tool_knowledge` port as a second wave. Done (2026-10-11); compare each surface separately after the baseline.
-7. Freeze successful adaptive discoveries, then replay on at least 30 held-out seeds per candidate/profile. Code done (2026-10-11); real-model evaluation pending.
+7. Freeze successful adaptive discoveries, then replay on at least 30 held-out seeds per candidate/profile. Done: code 2026-10-11, held-out replay on both models 2026-10-12 (`findings.md` section 5).
 8. Compare known vs unknown secret-label profiles with identical target settings. Code done (2026-10-11); real-model evaluation pending.
 
 ### Attack-side acceptance tasks still open
 
 - [x] Implement and regression-test the attack profiles, tool-knowledge adaptation, and frozen replay.
-- [ ] Run a fresh append/known baseline on current target and attacker models with at least 30 seeds per cell; preserve config, model versions, budgets, results, and errors.
+- [x] Run a fresh append/known baseline on current target and attacker models with at least 30 seeds per cell; preserve config, model versions, budgets, results, and errors.
 - [ ] Run one-factor comparisons for positions, delivery bounce, and tool metadata, keeping target task/defense/budget fixed. Compare utility as well as ASR; a bounce may lower utility independently of malicious instructions.
 - [ ] Measure `tool_knowledge` and PAIR encoding guidance against the same baseline.
-- [ ] Save successful discovery payloads with `--save-replay-library`, replay with `--replay-library` on disjoint seeds, and report replay ASR separately from discovery break rate. Repeat stochastic runs before claiming repeatability.
+- [x] Save successful discovery payloads with `--save-replay-library`, replay with `--replay-library` on disjoint seeds, and report replay ASR separately from discovery break rate. Done 2026-10-12; the repeated stochastic run before claiming repeatability is not.
 - [ ] Compare known/unknown profiles, documenting that the attacker still knows public task facts and may learn from redacted feedback.
 
 Commands, threat-profile semantics, and replay limitations are in `attacks.md`. Offline tests establish pipeline behavior, not real-model attack strength or a guarantee that an agent is safe to deploy.
@@ -82,7 +82,8 @@ Commands, threat-profile semantics, and replay limitations are in `attacks.md`. 
 Defense side after that, starting with `bind(ctx)` and the two deterministic defenses. Items 1 to 7 of track 3 are done (2026-10-11, offline-verified), the quarantined reader last.
 
 Every code item in both tables is done.
-What remains is measurement: the baseline sweep, the no-attack control run, the replay evaluation, the stack cells, the five attack-side comparison runs, and the findings and deck rewrite.
+What remains is measurement: the five attack-side comparison runs and a repeated stochastic replay run.
+The baseline sweep, the no-attack control run, the replay evaluation, the stack cells, the findings rewrite and the deck refresh are done (2026-10-11 and 2026-10-12).
 
 Done since this plan was written but outside its scope, see `test-audit-2026-10-11.md`: an end-to-end test layer, eleven measurement and robustness bugs fixed, and the test suite pruned.
 
@@ -98,9 +99,9 @@ Nothing here changes an attack or a defense; it makes the other two tracks' resu
 
 1. Fresh baseline sweep on the code as of 2026-10-11. Done: two models (`DeepSeek-V4-Pro`, `gpt-5.6-luna`; 4.1-mini dropped), raw_loop and multi_agent (langgraph dropped after a 280-episode sanity row agreed with raw_loop in 52 of 56 cells), four scenarios, the six attacks that move numbers plus the control, one rung of each kind plus one stack, 30 seeds. 26,880 episodes; `results/2026-10-11/`.
 2. No-attack control run, so a defense's utility cost can be separated from attack disruption. Done 2026-10-11, in the same sweep; it also caught a case-sensitive task-marker bug in the judge (fixed, calendar cells re-run and spliced).
-3. Replay library, so a tree-search win at temperature can be checked for luck. Discovery done 2026-10-11 (DeepSeek 150 payloads, luna 5); held-out replay running, result goes in `findings.md` section 5.
+3. Replay library, so a tree-search win at temperature can be checked for luck. Discovery done 2026-10-11 (DeepSeek 150 payloads, luna 5); Held-out replay done 2026-10-12: DeepSeek undefended discoveries transfer at the fixed attacks' rate (24 of 24), defended ones at 16% to 19% on their rung and mostly through the relay, luna 2 of 5; `findings.md` section 5.
 4. Stacked defenses as a measurement feature (a composite that applies several rungs), so L1+L2 and L2+allowlist cells exist when track 3 lands. Done; `spotlighting+recipient_allowlist` measured in the baseline (0% ASR, 100% utility on both models).
-5. Rewrite `findings.md` from the new results and refresh the deck numbers. `findings.md` rewritten 2026-10-11 (replay section pending the run); deck numbers next.
+5. Rewrite `findings.md` from the new results and refresh the deck numbers. Done: `findings.md` rewritten 2026-10-11, replay section added 2026-10-12; deck refreshed to the 2026-10-11 baseline on 2026-10-12.
 
 ### Track 2: attack side, second wave
 

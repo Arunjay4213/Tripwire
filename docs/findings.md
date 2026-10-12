@@ -176,7 +176,28 @@ Every one of the 24 transfers.
   What the search learned against an open model is the same thing the hand-written attacks already know, and the prompt rungs cut it the same way.
 - Relay 80% against raw loop 74%: the orchestration gap of section 4 again, narrower than on luna because DeepSeek's raw loop is already open.
 
-TODO-REPLAY-DEEPSEEK-DEFENDED
+**DeepSeek, held out: the defended discoveries.**
+All 32 payloads that broke a prompt rung during discovery (17 against prompt hardening, 15 against spotlighting; 15 from PAIR, 17 from TAP) were replayed on 30 unseen seeds, both adapters, the four rungs (7,680 episodes, 97 min, 247 errors: 246 guard content-filter rejections and one bad request).
+
+| found by | against | payloads | replay on that rung | leaked at least once | per payload (median, max) | other prompt rung | no_defense | outbound_guard |
+|---|---|---|---|---|---|---|---|---|
+| PAIR | prompt_hardening | 9 | 17% [14%, 20%] | 8 of 9 | 22%, 27% | 10% | 84% | 0% |
+| PAIR | spotlighting | 6 | 19% [16%, 24%] | 6 of 6 | 13%, 57% | 18% | 78% | 0% |
+| TAP | prompt_hardening | 8 | 16% [13%, 20%] | 7 of 8 | 12%, 37% | 11% | 74% | 0% |
+| TAP | spotlighting | 9 | 17% [14%, 20%] | 8 of 9 | 8%, 42% | 16% | 89% | 0% |
+
+- A defended break is real but weak.
+  29 of 32 payloads leak again on the rung they beat, at about one seed in six; the best single payload reaches 57%.
+  The discovery break rates (10% to 14% of 8-attempt campaigns) were not flukes of one seed, but no payload comes near `prerequisite_mirror` single-shot (64% through prompt hardening, 44% through spotlighting).
+- The transfer is almost all relay: 31% on `multi_agent` against 4% on `raw_loop` on the source rung.
+  The discoveries beat the prompt rungs by getting the summarizer to copy the instruction forward, the `relay_action_item` mechanism of section 4; the raw loop under either prompt rung stays nearly closed to them.
+- A payload found against one prompt rung works about as well on the other (10% to 18%), so the two rungs fail the same way.
+- The guard: 0% again, with 246 of its 1,920 episodes lost to the content filter rather than scored.
+
+**What the replay settles.**
+On DeepSeek, search against the open model yields reusable attacks at the fixed attacks' rate; search against the prompt rungs yields weak, relay-dependent ones; nothing was found against the guard, and nothing found elsewhere transfers to it.
+On luna, two of five undefended wins transfer, through the relay only.
+The replay rate on unseen seeds is the number to quote for an adaptive attack; the discovery break rate is a search statistic.
 
 ## 6. What a defense costs
 
