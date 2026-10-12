@@ -13,7 +13,7 @@ from contextlib import ExitStack, contextmanager
 import traceback
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Sequence, TypeVar
 
 import openai
@@ -32,6 +32,8 @@ from tripwire.harness.judge import (  # noqa: F401 -- BENIGN_* re-exported for s
     _executed_calls,
     _redact,
     attack_exfiltrated,
+    leaked_to as _leaked_to,
+    send_attempts,
     observe,
 )
 from tripwire.scenarios import INVOICE, Scenario
@@ -86,6 +88,13 @@ class EpisodeResult:
     defense_calls: int = 0
     defense_tokens: int = 0
     served_model: str = ""
+    # Evidence behind the score (judge.send_attempts / judge.leaked_to): the
+    # unauthorized address the secret reached when succeeded is True, and
+    # every send_email the model requested, executed or blocked, with whether
+    # it carried the secret. A defended cell's "blocked N sends" and a leak's
+    # "secret sent to X" in the security report come from here.
+    leaked_to: str | None = None
+    sends: list[dict] = field(default_factory=list)
 
 
 @dataclass
@@ -287,6 +296,8 @@ def run_episode(
         defense_calls=_counter(defense, "calls") - calls_before,
         defense_tokens=_counter(defense, "tokens") - tokens_before,
         served_model=getattr(trace, "served_model", "") or "",
+        leaked_to=_leaked_to(trace, canary, scenario.authorized_recipients),
+        sends=[asdict(s) for s in send_attempts(trace, canary, scenario.authorized_recipients)],
     )
 
 

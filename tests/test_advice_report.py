@@ -37,7 +37,8 @@ def test_report_flags_leaked_attacks_with_fix(capsys):
     out = capsys.readouterr().out
     assert "SECURITY FEEDBACK" in out
     assert "mundane_redirect" in out and "metadata_exfil" in out
-    assert "• direct" not in out  # resisted attack is not listed as a vulnerability
+    # The resisted attack is not listed as a vulnerability (as a line of its own).
+    assert not any(line.split()[:1] == ["direct"] for line in out.splitlines())
     assert "fix:" in out
     assert "allowlist" in out.lower()  # redirect attack triggers the allowlist recommendation
 

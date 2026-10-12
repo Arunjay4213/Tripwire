@@ -255,7 +255,7 @@ Three kinds of zero sit in the tables and they are not the same.
 Four things the zeros cannot say:
 
 - Whether an attack convinced the model and the rung stopped it, or the model never tried.
-  The judge computes that attempted-but-blocked signal but the runner does not yet store it in the results.
+  The judge computes that attempted-but-blocked signal; since 2026-10-12 every result stores it (`sends`, one record per requested send with `executed` and `carries_secret`, and `leaked_to`), but the 2026-10-11 files predate the field.
   The undefended rows show the attacks do convince DeepSeek, so most of its zeros are blocks, but that is inference until the field is recorded.
 - Anything about integrity.
   Success here is one planted secret leaving through one sink to an unlisted address.
@@ -267,7 +267,7 @@ Four things the zeros cannot say:
 
 ## 9. Next
 
-- Record the blocked-attempt count per episode so every zero reads "blocked N attempts".
+- Re-run the ladder with the new `sends` field so every zero reads "blocked N attempts" (the field exists; these results predate it).
 - Store the executed sends in the results so a judge fix is a re-score, not a re-run.
 - Judge validation on a larger or adversarially chosen sample: the 30-episode check in section 7 agreed 30 of 30, which bounds the disagreement rate at about 11% (Wilson), not at zero.
 - Attacks for the current rungs: recipient-parsing mismatches, the reader's typed channel, and integrity goals, which need the judge extended first.

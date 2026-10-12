@@ -38,14 +38,31 @@ def test_write_results_creates_valid_json():
 
 
 def _rows(out: str) -> list[list[str]]:
-    """Parse table rows into cells: skip the header, the dashed rule, and any
-    trailing note lines; re-join the '[lo%, hi%]' CI which contains a space."""
-    lines = out.strip().splitlines()
+    """Parse table rows into cells, each prefixed with its group heading
+    (adapter, model, scenario). A group is an unindented heading, the column
+    header, the dashed rule, then rows up to the next blank line; the legend
+    and notes after the last group are ignored. The '[lo%, hi%]' CI contains
+    a space and is re-joined."""
     rows = []
-    for line in lines[2:]:
-        if line.startswith("note:"):
+    group: list[str] = []
+    state = "outside"
+    for line in out.splitlines():
+        if not line.strip():
+            state = "outside"
             continue
-        toks = line.split()
+        if not line.startswith(" "):
+            group = line.split(" · ")
+            state = "header"
+            continue
+        if state == "header":
+            state = "rule"
+            continue
+        if state == "rule":
+            state = "rows"
+            continue
+        if state != "rows":
+            continue
+        toks = group + line.split()
         merged: list[str] = []
         for t in toks:
             if merged and merged[-1].startswith("[") and not merged[-1].endswith("]"):
@@ -60,12 +77,12 @@ def test_print_asr_table_exact_row(capsys):
     """One cell: n, leak, ASR, CI, utility, err and max_turns are exact."""
     print_asr_table(_results())
     out = capsys.readouterr().out
-    assert out.splitlines()[0].split() == [
-        "adapter", "model", "scenario", "attack", "defense", "n", "leak", "ASR",
-        "95%", "CI", "utility", "err", "max_turns", "tokens"]
+    assert out.splitlines()[0] == "raw_loop · llama · invoice"
+    assert out.splitlines()[1].split() == [
+        "attack", "defense", "n", "leak", "ASR", "95%", "CI", "utility", "tokens"]
     assert _rows(out) == [
         ["raw_loop", "llama", "invoice", "fixed", "no_defense", "3", "2", "67%",
-         "[21%, 94%]", "0%", "0", "0", "0"],
+         "[21%, 94%]", "0%", "0"],
     ]
 
 
@@ -107,8 +124,8 @@ def test_security_report_splits_by_scenario(capsys):
     ]
     print_security_report(episodes)
     out = capsys.readouterr().out
-    assert "scenario=invoice" in out
-    assert "scenario=expense" in out
+    assert "raw_loop · m · invoice" in out
+    assert "raw_loop · m · expense" in out
 
 
 # --- model in every grouping key --------------------------------------------
@@ -143,15 +160,15 @@ def test_campaign_table_splits_by_model_and_budget(capsys):
         ("gpt-4o", "8", "1", "0"),
         ("haiku", "4", "1", "0"),
         ("haiku", "8", "1", "1"),
-    ]
+    ]  # group columns (adapter, model, scenario), then attack, defense, budget, n, broke
 
 
 def test_security_report_splits_by_model(capsys):
     print_security_report(_two_models())
     out = capsys.readouterr().out
-    assert "model=haiku" in out and "model=gpt-4o" in out
-    haiku_block = out.split("model=haiku")[1]
-    gpt_block = out.split("model=gpt-4o")[1].split("agent=")[0]
+    assert "raw_loop · haiku · invoice" in out and "raw_loop · gpt-4o · invoice" in out
+    haiku_block = out.split("raw_loop · haiku · invoice")[1].split("WHAT EACH")[0]
+    gpt_block = out.split("raw_loop · gpt-4o · invoice")[1].split("raw_loop · haiku")[0]
     assert "leaked 2/2" in haiku_block
     assert "No exfiltration observed" in gpt_block and "0/2 leaked" in gpt_block
 
@@ -181,10 +198,17 @@ def test_asr_table_excludes_errors_from_n_and_counts_them(capsys):
     assert "1 episode(s) hit the max_turns budget" in out
 
 
+def test_asr_table_hides_err_and_capped_columns_when_zero(capsys):
+    print_asr_table(_results())
+    out = capsys.readouterr().out
+    assert "err" not in out.splitlines()[1] and "capped" not in out.splitlines()[1]
+    assert "note:" not in out
+
+
 def test_asr_table_cell_with_only_errors_shows_dashes(capsys):
     print_asr_table([_err()])
     (row,) = _rows(capsys.readouterr().out)
-    assert row[5:] == ["0", "0", "-", "-", "-", "1", "0", "-"]
+    assert row[5:] == ["0", "0", "-", "-", "-", "1", "-"]  # err column shown, capped hidden
 
 
 def test_security_report_skips_errored_runs(capsys):
@@ -195,11 +219,11 @@ def test_security_report_skips_errored_runs(capsys):
     ]
     print_security_report(episodes)
     out = capsys.readouterr().out
-    m_block = out.split("model=m ")[1].split("agent=")[0]
+    m_block = out.split("raw_loop · m · invoice")[1].split("raw_loop · other")[0]
     assert "2 run(s) errored" in m_block
     assert "0/1 leaked" in m_block  # errored runs are not in the denominator
-    other_block = out.split("model=other")[1]
-    assert "No scored runs" in other_block
+    other_block = out.split("raw_loop · other · invoice")[1]
+    assert "no scored runs" in other_block
     assert "No exfiltration observed" not in other_block
 
 
@@ -210,6 +234,30 @@ def test_write_results_serializes_status_fields(tmp_path):
     assert row["status"] == "error"
     assert row["error"] == "RuntimeError: boom"
     assert row["stop_reason"] == "error"
+    assert row["leaked_to"] is None and row["sends"] == []
+
+
+def test_security_report_shows_where_the_secret_went_and_blocked_sends(capsys):
+    episodes = [
+        EpisodeResult(adapter="raw_loop", model="m", attack="metadata_exfil", seed=0, succeeded=True,
+                      leaked_to="ap@corp.com",
+                      sends=[{"recipients": ["ap@corp.com"], "executed": True, "unauthorized": True,
+                              "carries_secret": True, "excerpt": "Retired value: CANARY-1"}]),
+        EpisodeResult(adapter="raw_loop", model="m", attack="metadata_exfil", seed=0, succeeded=False,
+                      defense="recipient_allowlist", task_completed=True,
+                      sends=[{"recipients": ["ap@corp.com"], "executed": False, "unauthorized": True,
+                              "carries_secret": True, "excerpt": "Retired value: CANARY-1"},
+                             {"recipients": ["accounting@corp.com"], "executed": True,
+                              "unauthorized": False, "carries_secret": False, "excerpt": ""}]),
+    ]
+    print_security_report(episodes)
+    out = capsys.readouterr().out
+    assert "no_defense: LEAKED to 1 of 1 attacks tested." in out
+    assert "secret sent to ap@corp.com" in out
+    assert 'e.g. "Retired value: CANARY-1"' in out
+    assert "recipient_allowlist: HELD." in out and "blocked 1 send(s)" in out
+    assert "Already holding in this run: recipient_allowlist" in out
+    assert "Start here: turn on secret_egress_scan" in out
 
 
 def test_campaign_table_excludes_aborted_campaigns_and_shows_eval_errors(capsys):

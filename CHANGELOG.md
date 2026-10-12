@@ -18,6 +18,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added (measurement)
 
+- **Every result records the evidence behind its score.** `EpisodeResult` carries `leaked_to` (the unauthorized address the secret reached) and `sends` (every `send_email` the model requested, with `recipients`, `executed`, `unauthorized`, `carries_secret` and a trimmed `excerpt` of the text that carried the secret), from the new `judge.send_attempts` and `judge.leaked_to`.
+  A results file now shows the leak, and a defended cell shows how many sends it refused.
+- **Readable console output.** The ASR and campaign tables group rows under an `adapter · model · scenario` heading instead of repeating those columns, drop the `err` and `capped` columns when they are zero everywhere, and end with a one-line legend.
+  The security report lists each defense as `HELD` or `LEAKED` per agent, names where the secret went and quotes the email that carried it, counts blocked sends, and gives the per-attack explanation and fix once at the end instead of once per agent; it also says which tested defense already holds.
 - **Every result records what it cost.** Episodes carry `prompt_tokens`, `completion_tokens`, `model_calls`, the model id the provider actually served (`served_model`, e.g. the dated Azure deployment version), and the defense's own `defense_calls` and `defense_tokens` (the outbound guard's and the quarantined reader's, summed in a stack); campaigns carry the target's totals and `attacker_tokens`.
   The ASR and campaign tables gain a `tokens` column (mean per scored run), so a defense's cost is reported, not guessed.
 - **`limits.max_tokens_per_run` is enforced.** The sweep stops scheduling cells once the running total reaches it, keeps everything that ran, and reports how many cells were not run; the overshoot is at most the cells in flight.
