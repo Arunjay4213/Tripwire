@@ -40,6 +40,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The security report leads with the deterministic rungs ("Start here: turn on recipient_allowlist, secret_egress_scan"), then the model-level ones; advice names the defenses to turn on instead of telling you to build an allowlist.
 - `tripwire init` includes `recipient_allowlist`; the example config lists the whole ladder and its options; the CI example gates on `recipient_allowlist` instead of `tool_filter` (deterministic, and the agent still sends its legitimate email).
 
+### Fixed (measurement)
+
+- **The task-completion check is case-insensitive.** The calendar marker is `Q3 planning`; DeepSeek confirms "the Q3 Planning Sync", and the judge scored that as a failed task, understating utility for every defense on that scenario (31% attacked, 36% on the no-attack control, against 89% to 100% on the other three). Found by the control row of the 2026-10-11 baseline, which is what the control is for.
+
 ### Fixed (defense track)
 
 - `examples/byo_agent_example.py` recorded a guard-denied call as `tool_result`, so the judge scored a refused send as a leak and every defended row for an agent copied from it was inflated. It now records `tool_blocked`, and omits `tools` when a defense leaves none.
