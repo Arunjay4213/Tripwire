@@ -20,6 +20,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 - **Every result records the evidence behind its score.** `EpisodeResult` carries `leaked_to` (the unauthorized address the secret reached) and `sends` (every `send_email` the model requested, with `recipients`, `executed`, `unauthorized`, `carries_secret` and a trimmed `excerpt` of the text that carried the secret), from the new `judge.send_attempts` and `judge.leaked_to`.
   A results file now shows the leak, and a defended cell shows how many sends it refused.
+- **Any served model can be the attacker or the guard.** `llm.chat_completion` drops `temperature` and renames `max_tokens` to `max_completion_tokens` when a model rejects them, learned once per model from the provider's own 400; the PAIR and TAP attackers and the outbound guard call through it.
+  The GPT-5 family (gpt-5.x, gpt-5.6-luna/sol/terra) needed this; the adapters never sent either parameter, which is why those models already worked as targets.
+  Note that gpt-5.6-sol on Azure refuses the attacker prompt itself with `cyber_policy` (see `docs/provider-policy.md`), so the parameter fix is necessary but not sufficient for that model in the attacker role.
 - **`--details`.** The tables show n, leaks, ASR and the 95% CI by default; `--details` adds the utility and tokens columns (both are always in the results file).
 - **Readable console output.** The ASR and campaign tables group rows under an `adapter · model · scenario` heading instead of repeating those columns, drop the `err` and `capped` columns when they are zero everywhere, and end with a one-line legend.
   The security report lists each defense as `HELD` or `LEAKED` per agent, names where the secret went and quotes the email that carried it, counts blocked sends, and gives the per-attack explanation and fix once at the end instead of once per agent; it also says which tested defense already holds.

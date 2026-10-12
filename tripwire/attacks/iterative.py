@@ -40,7 +40,7 @@ from typing import Sequence
 from openai import OpenAI
 
 from tripwire.attacks.base import AttackContext, attacker_text, default_context
-from tripwire.harness.llm import is_transient, make_client, resolve_model
+from tripwire.harness.llm import chat_completion, is_transient, make_client, resolve_model
 
 # One history entry = (payload, grade, feedback). grade is the recipient-blind
 # 0/1/2 from the judge; feedback is the runner's redacted per-attempt summary
@@ -358,7 +358,8 @@ class IterativeAttacker:
         last_err: Exception | None = None
         for attempt in range(_MAX_TRANSIENT_RETRIES):
             try:
-                resp = self.client.chat.completions.create(
+                resp = chat_completion(
+                    self.client,
                     model=self.model,
                     messages=messages,
                     max_tokens=self.max_response_tokens,

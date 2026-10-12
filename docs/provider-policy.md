@@ -88,3 +88,12 @@ Until exceptions/authorizations are obtained:
 2. **Self-hosted open models** - no ToS concern at all.
    Slower, costs more.
 3. **Closed-model APIs** - do not run until authorized. 
+
+## Models that refuse the attacker role outright
+
+Measured 2026-10-12: `gpt-5.6-sol` on Azure AI Foundry rejects the PAIR attacker's first request with HTTP 400, code `cyber_policy` ("This content was flagged for possible cybersecurity risk ... To get authorized for security work, join the Trusted Access for Cyber program").
+The block is on the request content, not on a parameter, so it applies to any attacker prompt that asks the model to craft an injection.
+Tripwire records each such campaign as an error, never as a defense holding.
+Do not rephrase the attacker prompt to get past the classifier; that is the provider's authorization gate for exactly this kind of work.
+The sanctioned routes are the provider's program for security work, or an attacker model from a vendor whose terms you have checked (DeepSeek-V4-Pro is what the 2026-10-11 baseline used).
+

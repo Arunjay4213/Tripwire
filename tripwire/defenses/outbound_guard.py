@@ -232,7 +232,10 @@ class OutboundGuard:
             raise GuardError(
                 "no guard model: set OutboundGuard(model=...), GUARD_MODEL, or MODEL"
             )
-        response = self._get_client().chat.completions.create(
+        from tripwire.harness.llm import chat_completion
+
+        response = chat_completion(
+            self._get_client(),
             model=model,
             messages=[
                 {"role": "system", "content": _DETECTOR_SYSTEM_PROMPT},

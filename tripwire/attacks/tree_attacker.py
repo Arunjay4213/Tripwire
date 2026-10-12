@@ -45,7 +45,7 @@ from openai import OpenAI
 
 from tripwire.attacks.base import AttackContext, attacker_text, default_context
 from tripwire.harness.judge import Observation
-from tripwire.harness.llm import is_transient, make_client, resolve_model
+from tripwire.harness.llm import chat_completion, is_transient, make_client, resolve_model
 
 # evaluate(payload) -> Observation. Supplied by the runner; runs the payload
 # against the real target+defense and returns the attacker-visible feedback.
@@ -554,7 +554,8 @@ class TreeAttacker:
         last_err: Exception | None = None
         for attempt in range(3):
             try:
-                resp = self.client.chat.completions.create(
+                resp = chat_completion(
+                    self.client,
                     model=self.model,
                     messages=messages,
                     max_tokens=max_tokens or self.max_response_tokens,

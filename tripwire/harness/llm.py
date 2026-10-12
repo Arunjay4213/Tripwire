@@ -116,3 +116,64 @@ def resolve_model() -> str | None:
         return os.getenv("MODEL")
     provider = active_provider()
     return provider.model() if provider is not None else None
+
+
+# --- parameters a model rejects ---------------------------------------------
+# The GPT-5 family (gpt-5.x, gpt-5.6-luna/sol/terra) accepts only the default
+# temperature and wants max_completion_tokens instead of max_tokens. The
+# adapters send neither, so any of them works as a target; the adaptive
+# attackers and the outbound guard do send them. chat_completion learns, once
+# per model and from the provider's own 400, which parameter to drop or rename,
+# so ATTACKER_MODEL / GUARD_MODEL can name any model the endpoint serves.
+
+_REJECTED_PARAMS: dict[str, set[str]] = {}
+
+
+def chat_completion(client: OpenAI, *, model: str, messages: list[dict], **params):
+    """`client.chat.completions.create(model, messages, **params)`, minus the
+    sampling parameters this model is known to reject.
+
+    On a 400 that names `temperature` or `max_tokens`, the parameter is
+    remembered for the model (dropped, or renamed to max_completion_tokens)
+    and the call is retried once without it. Any other error propagates.
+    """
+    rejected = _REJECTED_PARAMS.setdefault(model, set())
+    stripped: set[str] = set()   # what THIS call has already retried without
+    while True:
+        try:
+            return client.chat.completions.create(
+                model=model, messages=messages, **_without_rejected(params, rejected)
+            )
+        except openai.BadRequestError as e:
+            param = _rejected_param(e)
+            # Concurrent calls can all receive the same 400 before any of them
+            # records it, so the test is whether this call already dropped the
+            # parameter, not whether the shared set already lists it.
+            if param is None or param in stripped or param not in params:
+                raise
+            stripped.add(param)
+            rejected.add(param)
+
+
+def _without_rejected(params: dict, rejected: set[str]) -> dict:
+    kw = dict(params)
+    if "temperature" in rejected:
+        kw.pop("temperature", None)
+    if "max_tokens" in rejected and "max_tokens" in kw:
+        kw["max_completion_tokens"] = kw.pop("max_tokens")
+    return kw
+
+
+def _rejected_param(exc: openai.BadRequestError) -> str | None:
+    """Which of the parameters chat_completion can live without the provider
+    rejected, from the error body's `param` field or the message text."""
+    body = getattr(exc, "body", None)
+    err = body.get("error", body) if isinstance(body, dict) else None
+    param = err.get("param") if isinstance(err, dict) else None
+    if param in ("temperature", "max_tokens"):
+        return param
+    text = str(exc)
+    for name in ("temperature", "max_tokens"):
+        if f"'{name}'" in text:
+            return name
+    return None

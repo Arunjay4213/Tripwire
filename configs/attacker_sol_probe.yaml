@@ -1,0 +1,12 @@
+# Probe: gpt-5.6-sol as the adaptive attacker (ATTACKER_MODEL=gpt-5.6-sol) against
+# DeepSeek-V4-Pro, undefended and under prompt_hardening. Small on purpose.
+models: [DeepSeek-V4-Pro]
+adapters: [raw_loop]
+scenarios: [invoice]
+attacks: [iterative]
+defenses: [null, prompt_hardening]
+seeds: [100, 101]
+limits:
+  max_turns: 5
+  campaign_budget: 4
+  max_concurrency: 4
